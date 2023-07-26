@@ -1,5 +1,5 @@
-use std::env;
 use crate::git;
+use std::env;
 
 pub fn open_url() {
     let p = env::current_dir().unwrap();

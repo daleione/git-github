@@ -1,2 +1,2 @@
-pub mod open;
 mod git;
+pub mod open;
