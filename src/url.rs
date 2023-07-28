@@ -1,5 +1,3 @@
-use std::fmt::format;
-
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_till, take_until, take_while};
 use nom::sequence::{terminated, tuple};

@@ -15,7 +15,7 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-    /// does testing things
+    /// Open the repo website in your browser.
     Open {
         #[clap(short, long, value_parser, conflicts_with_all = &["branch"])]
         commit: Option<String>,
@@ -39,7 +39,7 @@ fn main() {
             if let Some(commit) = commit {
                 open::open_commit(remote, commit);
             } else if let Some(branch) = branch {
-                open::open_branch(remote, &branch);
+                open::open_branch(remote, branch);
             } else {
                 open::open_remote(remote);
             }
