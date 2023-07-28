@@ -35,7 +35,7 @@ impl Repo {
         if let Some(remote) = Remote::parse(remote_url) {
             return Ok(remote.get_http_url());
         }
-        return Err("nop".into())
+        Err("nop".into())
     }
 }
 
@@ -47,8 +47,8 @@ impl Repo {
 pub struct Remote {
     schema: String,
     host: String,
-    username: String,
-    reponame: String,
+    user: String,
+    repo: String,
 }
 
 fn schema_parser(input: &str) -> IResult<&str, &str> {
@@ -75,12 +75,14 @@ fn repo_parser(input: &str) -> IResult<&str, &str> {
 
 impl Remote {
     fn parse(url_str: &str) -> Option<Remote> {
-        if let Ok((_, (schema, host, username, reponame))) = tuple((schema_parser, host_parser, user_parser, repo_parser))(url_str) {
+        if let Ok((_, (schema, host, user, repo))) =
+            tuple((schema_parser, host_parser, user_parser, repo_parser))(url_str)
+        {
             Some(Remote {
                 schema: schema.to_string(),
                 host: host.to_string(),
-                username: username.to_string(),
-                reponame: reponame.to_string(),
+                user: user.to_string(),
+                repo: repo.to_string(),
             })
         } else {
             None
@@ -88,7 +90,7 @@ impl Remote {
     }
 
     fn is_git(&self) -> bool {
-        return self.schema == "git";
+        self.schema == "git"
     }
 
     fn is_http(&self) -> bool {
@@ -96,15 +98,15 @@ impl Remote {
         if http_schemas.iter().any(|&s| s == self.schema) {
             return true;
         }
-        return false;
+        false
     }
 
     fn get_http_url(&self) -> String {
-        return format!(
+        format!(
             "https://{}/{}/{}",
             self.host.as_str(),
-            self.username.as_str(),
-            self.reponame.as_str(),
-        );
+            self.user.as_str(),
+            self.repo.as_str(),
+        )
     }
 }
