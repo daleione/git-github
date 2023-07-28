@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 
-
+use git_github::open;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -18,21 +18,31 @@ enum Commands {
     /// does testing things
     Open {
         #[clap(short, long, value_parser, conflicts_with_all = &["branch"])]
-        commit: bool,
+        commit: Option<String>,
 
         #[clap(short, long, value_parser)]
-        branch: bool,
+        branch: Option<String>,
 
         #[clap(short, long, value_parser, default_value = "origin")]
-        remote_name: String,
+        remote: String,
     },
 }
 
 fn main() {
     let cli = Cli::parse();
     match &cli.command {
-        Some(Commands::Open { .. }) => {
-            git_github::open::open_url();
+        Some(Commands::Open {
+            commit,
+            branch,
+            remote,
+        }) => {
+            if let Some(commit) = commit {
+                open::open_commit(remote, commit);
+            } else if let Some(branch) = branch {
+                open::open_branch(remote, &branch);
+            } else {
+                open::open_remote(remote);
+            }
         }
         None => {}
     }

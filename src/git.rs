@@ -1,11 +1,8 @@
 use std::error::Error;
 use std::path::PathBuf;
 
+use crate::url::Remote;
 use git2::Repository;
-use nom::branch::alt;
-use nom::bytes::complete::{tag, take_till, take_until, take_while};
-use nom::sequence::{terminated, tuple};
-use nom::IResult;
 
 pub struct Repo {
     repository: Repository,
@@ -29,84 +26,12 @@ impl Repo {
         Self { repository }
     }
 
-    pub fn remote_url(&self) -> Result<String, Box<dyn Error>> {
-        let remote = self.repository.find_remote("origin").unwrap();
-        let remote_url = remote.url().unwrap();
+    pub fn remote(&self, remote_name: &str) -> Result<Remote, Box<dyn Error>> {
+        let repo_remote = self.repository.find_remote(remote_name).unwrap();
+        let remote_url = repo_remote.url().unwrap();
         if let Some(remote) = Remote::parse(remote_url) {
-            return Ok(remote.get_http_url());
+            return Ok(remote);
         }
         Err("nop".into())
-    }
-}
-
-/// Contains the address of the git repository.
-/// git remote url can be two format:
-/// * git@xxx.com:user/repo.git
-//  * https://xxx.com/user/repo.git
-#[derive(Debug, Default)]
-pub struct Remote {
-    schema: String,
-    host: String,
-    user: String,
-    repo: String,
-}
-
-fn schema_parser(input: &str) -> IResult<&str, &str> {
-    terminated(
-        alt((tag("git"), tag("https"), tag("http"))),
-        take_while(|c| c == '@' || c == ':' || c == '/'),
-    )(input)
-}
-
-fn host_parser(input: &str) -> IResult<&str, &str> {
-    terminated(
-        take_till(|c| c == ':' || c == '/'),
-        take_while(|c| c == ':' || c == '/'),
-    )(input)
-}
-
-fn user_parser(input: &str) -> IResult<&str, &str> {
-    terminated(take_until("/"), take_while(|c| c == ':' || c == '/'))(input)
-}
-
-fn repo_parser(input: &str) -> IResult<&str, &str> {
-    take_till(|c| c == '.')(input)
-}
-
-impl Remote {
-    fn parse(url_str: &str) -> Option<Remote> {
-        if let Ok((_, (schema, host, user, repo))) =
-            tuple((schema_parser, host_parser, user_parser, repo_parser))(url_str)
-        {
-            Some(Remote {
-                schema: schema.to_string(),
-                host: host.to_string(),
-                user: user.to_string(),
-                repo: repo.to_string(),
-            })
-        } else {
-            None
-        }
-    }
-
-    fn is_git(&self) -> bool {
-        self.schema == "git"
-    }
-
-    fn is_http(&self) -> bool {
-        let http_schemas: [&str; 2] = ["http", "https"];
-        if http_schemas.iter().any(|&s| s == self.schema) {
-            return true;
-        }
-        false
-    }
-
-    fn get_http_url(&self) -> String {
-        format!(
-            "https://{}/{}/{}",
-            self.host.as_str(),
-            self.user.as_str(),
-            self.repo.as_str(),
-        )
     }
 }
