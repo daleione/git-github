@@ -22,7 +22,7 @@ fn user_parser(input: &str) -> IResult<&str, &str> {
 }
 
 fn repo_parser(input: &str) -> IResult<&str, &str> {
-    take_till(|c| c == '.')(input)
+    take_until(".git")(input)
 }
 
 enum Platform {
@@ -100,6 +100,12 @@ impl Remote {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn repo_name() {
+        assert_eq!(repo_parser("repo_name.git"), Ok((".git", "repo_name")));
+        assert_eq!(repo_parser("repo_name.rs.git"), Ok((".git", "repo_name.rs")));
+    }
 
     #[test]
     fn remote_git() {
