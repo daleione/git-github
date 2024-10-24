@@ -17,10 +17,12 @@ fn host_parser(input: &str) -> IResult<&str, &str> {
     )(input)
 }
 
+/// user_parser return user name
 fn user_parser(input: &str) -> IResult<&str, &str> {
     terminated(take_until("/"), take_while(|c| c == ':' || c == '/'))(input)
 }
 
+/// repo_parser return repo name
 fn repo_parser(input: &str) -> IResult<&str, &str> {
     take_until(".git")(input)
 }
@@ -105,6 +107,7 @@ mod test {
     fn repo_name() {
         assert_eq!(repo_parser("repo_name.git"), Ok((".git", "repo_name")));
         assert_eq!(repo_parser("repo_name.rs.git"), Ok((".git", "repo_name.rs")));
+        assert_eq!(repo_parser("repo-name.rs.git"), Ok((".git", "repo-name.rs")));
     }
 
     #[test]
