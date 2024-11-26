@@ -26,12 +26,20 @@ impl Repo {
         Self { repository }
     }
 
-    pub fn remote(&self, remote_name: &str) -> Result<Remote, Box<dyn Error>> {
-        let repo_remote = self.repository.find_remote(remote_name).unwrap();
+    pub fn remote(&self, name: &str) -> Result<Remote, Box<dyn Error>> {
+        let repo_remote = self.repository.find_remote(name).unwrap();
         let remote_url = repo_remote.url().unwrap();
         if let Some(remote) = Remote::parse(remote_url) {
             return Ok(remote);
         }
         Err("nop".into())
+    }
+
+    pub fn exist(&self, remote: &str, branch: &str) -> bool {
+        let reference_name = format!("refs/remotes/{}/{}", remote, branch);
+        match self.repository.find_reference(&reference_name) {
+            Ok(_) => true,
+            Err(_) => false,
+        }
     }
 }
