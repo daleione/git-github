@@ -42,4 +42,13 @@ impl Repo {
             Err(_) => false,
         }
     }
+
+    pub fn current_branch(&self) -> Result<String, Box<dyn Error>> {
+        let head = self.repository.head()?;
+        if let Some(name) = head.shorthand() {
+            Ok(name.to_string())
+        } else {
+            Err("Could not get current branch name".into())
+        }
+    }
 }

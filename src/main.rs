@@ -37,11 +37,11 @@ fn main() {
             remote,
         }) => {
             if let Some(commit) = commit {
-                open::open_commit(remote, commit);
+                open::open(remote, open::OpenTarget::Commit(commit.to_string()));
             } else if let Some(branch) = branch {
-                open::open_branch(remote, branch);
+                open::open(remote, open::OpenTarget::Branch(branch.to_string()));
             } else {
-                open::open_remote(remote);
+                open::open(remote, open::OpenTarget::Remote);
             }
         }
         None => {}
