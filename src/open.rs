@@ -19,11 +19,14 @@ pub fn open(remote_name: &str, target: OpenTarget) {
         eprintln!("Failed to get current directory");
         return Default::default();
     });
-    let mut repo = git::Repo::new(&path);
+    let repo = git::Repo::new(&path);
 
     if let OpenTarget::Branch(branch_name) = &target {
         if !repo.exist(remote_name, branch_name) {
-            eprintln!("Error: Branch '{}' not found in remote '{}'", branch_name, remote_name);
+            eprintln!(
+                "Error: Branch '{}' not found in remote '{}'",
+                branch_name, remote_name
+            );
             return;
         }
     }

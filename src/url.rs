@@ -1,5 +1,6 @@
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_till, take_until, take_while};
+use nom::combinator::{peek, rest};
 use nom::sequence::{terminated, tuple};
 use nom::IResult;
 
@@ -24,7 +25,10 @@ fn user_parser(input: &str) -> IResult<&str, &str> {
 
 /// repo_parser return repo name
 fn repo_parser(input: &str) -> IResult<&str, &str> {
-    take_until(".git")(input)
+    alt((
+        terminated(take_until(".git"), peek(tag(".git"))),
+        rest,
+    ))(input)
 }
 
 enum Platform {
@@ -105,9 +109,16 @@ mod test {
 
     #[test]
     fn repo_name() {
+        assert_eq!(repo_parser("repo_name"), Ok(("", "repo_name")));
         assert_eq!(repo_parser("repo_name.git"), Ok((".git", "repo_name")));
-        assert_eq!(repo_parser("repo_name.rs.git"), Ok((".git", "repo_name.rs")));
-        assert_eq!(repo_parser("repo-name.rs.git"), Ok((".git", "repo-name.rs")));
+        assert_eq!(
+            repo_parser("repo_name.rs.git"),
+            Ok((".git", "repo_name.rs"))
+        );
+        assert_eq!(
+            repo_parser("repo-name.rs.git"),
+            Ok((".git", "repo-name.rs"))
+        );
     }
 
     #[test]
