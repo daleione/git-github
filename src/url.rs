@@ -1,8 +1,10 @@
-use nom::branch::alt;
-use nom::bytes::complete::{tag, take_till, take_until, take_while};
-use nom::combinator::{peek, rest};
-use nom::sequence::{terminated, tuple};
-use nom::IResult;
+use nom::{
+	branch::alt,
+	bytes::complete::{tag, take_till, take_until, take_while},
+	combinator::{peek, rest},
+	sequence::{terminated, tuple},
+	IResult
+};
 
 fn schema_parser(input: &str) -> IResult<&str, &str> {
     terminated(
@@ -25,13 +27,10 @@ fn user_parser(input: &str) -> IResult<&str, &str> {
 
 /// repo_parser return repo name
 fn repo_parser(input: &str) -> IResult<&str, &str> {
-    alt((
-        terminated(take_until(".git"), peek(tag(".git"))),
-        rest,
-    ))(input)
+    alt((terminated(take_until(".git"), peek(tag(".git"))), rest))(input)
 }
 
-enum Platform {
+pub enum Platform {
     Github,
     Gitlab,
     Other(String),

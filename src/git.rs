@@ -37,10 +37,7 @@ impl Repo {
 
     pub fn exist(&self, remote: &str, branch: &str) -> bool {
         let reference_name = format!("refs/remotes/{}/{}", remote, branch);
-        match self.repository.find_reference(&reference_name) {
-            Ok(_) => true,
-            Err(_) => false,
-        }
+        self.repository.find_reference(&reference_name).is_ok()
     }
 
     pub fn current_branch(&self) -> Result<String, Box<dyn Error>> {

@@ -17,7 +17,7 @@ fn get_remote(remote_name: &str) -> Result<crate::url::Remote, String> {
 pub fn open(remote_name: &str, target: OpenTarget) {
     let path = env::current_dir().unwrap_or_else(|_| {
         eprintln!("Failed to get current directory");
-        return Default::default();
+        Default::default()
     });
     let repo = git::Repo::new(&path);
 
