@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 
-use git_github::open;
+use git_github::{open, focus};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -26,24 +26,50 @@ enum Commands {
         #[clap(short, long, value_parser, default_value = "origin")]
         remote: String,
     },
+    /// issues
+    Issue {
+        #[command(subcommand)]
+        issue_command: IssueCommands,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum IssueCommands {
+    /// Focus on a specific issue
+    Focus {
+        #[clap(short, long, value_parser)]
+        issue_id: i64,
+    },
+    /// List all issues
+    List,
 }
 
 fn main() {
     let cli = Cli::parse();
-    match &cli.command {
-        Some(Commands::Open {
-            commit,
-            branch,
-            remote,
-        }) => {
-            if let Some(commit) = commit {
-                open::open(remote, open::OpenTarget::Commit(commit.to_string()));
-            } else if let Some(branch) = branch {
-                open::open(remote, open::OpenTarget::Branch(branch.to_string()));
-            } else {
-                open::open(remote, open::OpenTarget::Remote);
-            }
+    if let Some(command) = &cli.command{
+        match command {
+            Commands::Open {
+                commit,
+                branch,
+                remote,
+            } => {
+                if let Some(commit) = commit {
+                    open::open(remote, open::OpenTarget::Commit(commit.to_string()));
+                } else if let Some(branch) = branch {
+                    open::open(remote, open::OpenTarget::Branch(branch.to_string()));
+                } else {
+                    open::open(remote, open::OpenTarget::Remote);
+                }
+            },
+            Commands::Issue { issue_command: focus_command } => match focus_command {
+                IssueCommands::Focus { issue_id } => {
+                    println!("Focusing on issue {}", issue_id);
+                }
+                IssueCommands::List => {
+                    println!("Listing all issues...");
+                    focus::list_issues("origin");
+                }
+            },
         }
-        None => {}
     }
 }

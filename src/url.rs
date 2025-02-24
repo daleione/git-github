@@ -1,9 +1,9 @@
 use nom::{
-	branch::alt,
-	bytes::complete::{tag, take_till, take_until, take_while},
-	combinator::{peek, rest},
-	sequence::{terminated, tuple},
-	IResult
+    branch::alt,
+    bytes::complete::{tag, take_till, take_until, take_while},
+    combinator::{peek, rest},
+    sequence::{terminated, tuple},
+    IResult,
 };
 
 fn schema_parser(input: &str) -> IResult<&str, &str> {
@@ -42,10 +42,10 @@ pub enum Platform {
 //  * https://xxx.com/user/repo.git
 #[derive(Debug, Default)]
 pub struct Remote {
-    schema: String,
-    host: String,
-    user: String,
-    repo: String,
+    pub schema: String,
+    pub host: String,
+    pub user: String,
+    pub repo: String,
 }
 
 impl Remote {

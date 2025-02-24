@@ -3,6 +3,8 @@ use std::path::PathBuf;
 
 use crate::url::Remote;
 use git2::Repository;
+use octocrab::models::issues::Issue;
+use octocrab::Page;
 
 pub struct Repo {
     repository: Repository,
@@ -47,5 +49,16 @@ impl Repo {
         } else {
             Err("Could not get current branch name".into())
         }
+    }
+
+    pub async fn issues(&self) -> Result<Page<Issue>, Box<dyn Error>> {
+        let octocrab = octocrab::instance();
+        let remote = self.remote("origin")?;
+        let issue_list = octocrab
+            .issues(remote.user, remote.repo)
+            .list()
+            .send()
+            .await?;
+        Ok(issue_list)
     }
 }
