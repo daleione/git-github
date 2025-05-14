@@ -9,7 +9,7 @@ use std::error::Error;
 pub fn ai_commit() -> Result<(), Box<dyn Error>> {
     let path = env::current_dir().map_err(|_| "无法获取当前目录")?;
     let repo = git::Repo::new(&path);
-    let changes = repo.get_git_changes()?;
+    let changes = repo.get_staged_git_changes()?;
 
     let messages = build_prompt_messages(&changes);
 

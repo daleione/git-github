@@ -63,27 +63,38 @@ impl Repo {
         Ok(issue_list)
     }
 
-    pub fn get_git_changes(&self) -> Result<String, Box<dyn Error>> {
+    pub fn get_staged_git_changes(&self) -> Result<String, Box<dyn Error>> {
         let mut opts = StatusOptions::new();
-        opts.include_untracked(true);
+        opts.include_untracked(false); // 不包括未跟踪文件
+        opts.include_ignored(false);
+        opts.include_unmodified(false);
+        opts.include_untracked(false);
+
         let statuses = self.repository.statuses(Some(&mut opts))?;
 
         let mut changes = String::new();
         let mut diff_opts = DiffOptions::new();
-        diff_opts.include_untracked(true);
+
+        // 获取 HEAD（上一次 commit）对应的 tree
+        let head_tree = self
+            .repository
+            .head()?
+            .peel_to_tree()
+            .ok();
+
+        // 比较 HEAD 和 index（暂存区）之间的差异
+        let diff = self.repository.diff_tree_to_index(head_tree.as_ref(), None, None)?;
 
         for entry in statuses.iter() {
             let status = entry.status();
             let path = entry.path().unwrap_or("");
 
-            // 获取文件状态描述
-            let status_desc = if status.is_wt_new() {
-                "Untracked"
-            } else if status.is_wt_modified() {
-                "Modified"
-            } else if status.is_wt_deleted() {
-                "Deleted"
-            } else if status.is_index_new() {
+            // 只处理 index 中的更改（即被 git add 的）
+            if !(status.is_index_new() || status.is_index_modified() || status.is_index_deleted()) {
+                continue;
+            }
+
+            let status_desc = if status.is_index_new() {
                 "Staged (new)"
             } else if status.is_index_modified() {
                 "Staged (modified)"
@@ -95,30 +106,13 @@ impl Repo {
 
             changes.push_str(&format!("{}: {}\n", status_desc, path));
 
-            // 如果是删除或未跟踪文件，不显示diff内容
-            if status.is_wt_deleted() || status.is_index_deleted() || status.is_wt_new() {
-                continue;
-            }
-
-            // 获取文件diff
-            let diff = if status.is_index_new() || status.is_index_modified() || status.is_index_deleted() {
-                // 已暂存的更改
-                self.repository.diff_index_to_workdir(None, Some(&mut diff_opts))?
-            } else {
-                // 未暂存的更改
-                self.repository.diff_tree_to_workdir(
-                    Some(&self.repository.head()?.peel_to_tree()?),
-                    Some(&mut diff_opts),
-                )?
-            };
-
-            // 查找特定文件的diff
+            // 查找该文件的 diff
             for delta in diff.deltas() {
                 let delta_path = delta.new_file().path().or_else(|| delta.old_file().path());
                 if delta_path == Some(std::path::Path::new(path)) {
                     let mut diff_text = String::new();
                     diff.print(git2::DiffFormat::Patch, |_, _, line| {
-                        diff_text.push_str(std::str::from_utf8(line.content()).unwrap());
+                        diff_text.push_str(std::str::from_utf8(line.content()).unwrap_or(""));
                         true
                     })?;
 
@@ -131,7 +125,7 @@ impl Repo {
         }
 
         if changes.is_empty() {
-            changes = "No uncommitted changes found.".to_string();
+            changes = "No staged changes found.".to_string();
         }
 
         Ok(changes)
