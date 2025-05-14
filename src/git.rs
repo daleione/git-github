@@ -1,7 +1,6 @@
 use std::error::Error;
 use std::path::PathBuf;
 
-
 use crate::url::Remote;
 use git2::{Repository, StatusOptions};
 use octocrab::models::issues::Issue;
@@ -75,14 +74,12 @@ impl Repo {
         let mut changes = String::new();
 
         // 获取 HEAD（上一次 commit）对应的 tree
-        let head_tree = self
-            .repository
-            .head()?
-            .peel_to_tree()
-            .ok();
+        let head_tree = self.repository.head()?.peel_to_tree().ok();
 
         // 比较 HEAD 和 index（暂存区）之间的差异
-        let diff = self.repository.diff_tree_to_index(head_tree.as_ref(), None, None)?;
+        let diff = self
+            .repository
+            .diff_tree_to_index(head_tree.as_ref(), None, None)?;
 
         for entry in statuses.iter() {
             let status = entry.status();
@@ -131,8 +128,8 @@ impl Repo {
     }
 
     pub fn commit(&self, message: &str) -> Result<String, Box<dyn Error>> {
-        let mut index = self.repository.index()?;  // 获取当前索引（暂存区）
-        let tree_id = index.write_tree()?;     // 从索引创建树
+        let mut index = self.repository.index()?; // 获取当前索引（暂存区）
+        let tree_id = index.write_tree()?; // 从索引创建树
         let tree = self.repository.find_tree(tree_id)?;
 
         let signature = self.repository.signature()?;
@@ -146,11 +143,10 @@ impl Repo {
             &signature,
             message,
             &tree,
-            &[&parent_commit],  // 包含父提交
+            &[&parent_commit], // 包含父提交
         )?;
 
         println!("New commit created: {}", commit_id);
         return Ok(commit_id.to_string());
     }
-
 }

@@ -1,9 +1,9 @@
 use crate::git;
-use std::{default, env};
 use futures::StreamExt;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
+use std::{default, env};
 
 /// 主函数：生成 AI Commit 信息
 pub fn ai_commit(apply: bool) -> Result<(), Box<dyn Error>> {
@@ -28,8 +28,9 @@ pub fn ai_commit(apply: bool) -> Result<(), Box<dyn Error>> {
             |content| {
                 print!("{}", content);
                 full_message.push_str(&content);
-            })
-            .await
+            },
+        )
+        .await
     })?;
 
     if apply {
@@ -43,7 +44,12 @@ pub fn ai_commit(apply: bool) -> Result<(), Box<dyn Error>> {
 
 /// 构造 ChatMessage 请求体
 fn build_prompt_messages(changes: &str, prompt_opt: Option<String>) -> Vec<ChatMessage> {
-    let mut prompt = "You are a helpful assistant that generates clear and concise Git commit messages based on the changes provided. Follow these rules:\n1. Use imperative mood (e.g., 'Fix bug' not 'Fixed bug')\n2. Keep it short (50 chars or less) for the title\n3. Optionally add a longer description after a blank line\n4. Focus on what changed, not why".to_string();
+    let mut prompt = "You are a helpful assistant that generates clear and concise Git commit messages based on the changes provided.
+Follow these rules:
+1. Use imperative mood (e.g., 'Fix bug' not 'Fixed bug')
+2. Keep it short (50 chars or less) for the title
+3. Optionally add a longer description after a blank line
+4. Focus on what changed, not why".to_string();
     if let Some(config_prompt) = prompt_opt {
         prompt = config_prompt;
     }
