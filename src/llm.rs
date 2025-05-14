@@ -1,5 +1,5 @@
 use crate::git;
-use std::env;
+use std::{default, env};
 use futures::StreamExt;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -11,12 +11,12 @@ pub fn ai_commit(apply: bool) -> Result<(), Box<dyn Error>> {
     let repo = git::Repo::new(&path);
     let changes = repo.get_staged_git_changes()?;
 
-    let messages = build_prompt_messages(&changes);
+    let config = crate::config::load_config()?; // 加载配置
+    let messages = build_prompt_messages(&changes, config.deepseek.prompt);
 
     println!("\nAI 建议的 Commit 信息：");
 
     let rt = tokio::runtime::Runtime::new()?;
-    let config = crate::config::load_config()?; // 加载配置
 
     let mut full_message = String::new();
 
@@ -29,7 +29,7 @@ pub fn ai_commit(apply: bool) -> Result<(), Box<dyn Error>> {
                 print!("{}", content);
                 full_message.push_str(&content);
             })
-        .await
+            .await
     })?;
 
     if apply {
@@ -42,11 +42,16 @@ pub fn ai_commit(apply: bool) -> Result<(), Box<dyn Error>> {
 }
 
 /// 构造 ChatMessage 请求体
-fn build_prompt_messages(changes: &str) -> Vec<ChatMessage> {
+fn build_prompt_messages(changes: &str, prompt_opt: Option<String>) -> Vec<ChatMessage> {
+    let mut prompt = "You are a helpful assistant that generates clear and concise Git commit messages based on the changes provided. Follow these rules:\n1. Use imperative mood (e.g., 'Fix bug' not 'Fixed bug')\n2. Keep it short (50 chars or less) for the title\n3. Optionally add a longer description after a blank line\n4. Focus on what changed, not why".to_string();
+    if let Some(config_prompt) = prompt_opt {
+        prompt = config_prompt;
+    }
+
     vec![
         ChatMessage {
             role: "system".to_string(),
-            content: "You are a helpful assistant that generates clear and concise Git commit messages based on the changes provided. Follow these rules:\n1. Use imperative mood (e.g., 'Fix bug' not 'Fixed bug')\n2. Keep it short (50 chars or less) for the title\n3. Optionally add a longer description after a blank line\n4. Focus on what changed, not why".to_string(),
+            content: prompt,
         },
         ChatMessage {
             role: "user".to_string(),

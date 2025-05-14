@@ -12,6 +12,7 @@ pub struct AppConfig {
 pub struct DeepSeekConfig {
     pub api_key: String,
     pub temperature: Option<f32>,
+    pub prompt: Option<String>,
 }
 
 
