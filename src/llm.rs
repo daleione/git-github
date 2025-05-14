@@ -6,18 +6,20 @@ use serde::{Deserialize, Serialize};
 use std::error::Error;
 
 /// 主函数：生成 AI Commit 信息
-pub fn ai_commit() -> Result<(), Box<dyn Error>> {
+pub fn ai_commit(apply: bool) -> Result<(), Box<dyn Error>> {
     let path = env::current_dir().map_err(|_| "无法获取当前目录")?;
     let repo = git::Repo::new(&path);
     let changes = repo.get_staged_git_changes()?;
 
     let messages = build_prompt_messages(&changes);
 
-    // println!("以下是检测到的 Git 改动：\n{}", changes);
     println!("\nAI 建议的 Commit 信息：");
 
     let rt = tokio::runtime::Runtime::new()?;
     let config = crate::config::load_config()?; // 加载配置
+
+    let mut full_message = String::new();
+
     rt.block_on(async {
         stream_commit_message(
             &config.deepseek.api_key,
@@ -25,9 +27,16 @@ pub fn ai_commit() -> Result<(), Box<dyn Error>> {
             config.deepseek.temperature,
             |content| {
                 print!("{}", content);
+                full_message.push_str(&content);
             })
         .await
     })?;
+
+    if apply {
+        println!("\n\n正在使用 git2 执行 commit ...");
+        let commit_id = repo.commit(&full_message)?;
+        println!("✅ Commit 完成，ID: {}", commit_id);
+    }
 
     Ok(())
 }
@@ -82,7 +91,7 @@ async fn stream_commit_message(
     api_key: &str,
     messages: Vec<ChatMessage>,
     temperature: Option<f32>,
-    callback: impl Fn(String),
+    mut callback: impl FnMut(String),
 ) -> Result<(), Box<dyn Error>> {
     let client = Client::new();
     let request_body = ChatRequest {

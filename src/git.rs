@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 
 use crate::url::Remote;
-use git2::{DiffOptions, Repository, StatusOptions};
+use git2::{Repository, StatusOptions};
 use octocrab::models::issues::Issue;
 use octocrab::Page;
 
@@ -65,7 +65,7 @@ impl Repo {
 
     pub fn get_staged_git_changes(&self) -> Result<String, Box<dyn Error>> {
         let mut opts = StatusOptions::new();
-        opts.include_untracked(false); // 不包括未跟踪文件
+        opts.include_untracked(false);
         opts.include_ignored(false);
         opts.include_unmodified(false);
         opts.include_untracked(false);
@@ -73,7 +73,6 @@ impl Repo {
         let statuses = self.repository.statuses(Some(&mut opts))?;
 
         let mut changes = String::new();
-        let mut diff_opts = DiffOptions::new();
 
         // 获取 HEAD（上一次 commit）对应的 tree
         let head_tree = self
@@ -129,6 +128,29 @@ impl Repo {
         }
 
         Ok(changes)
+    }
+
+    pub fn commit(&self, message: &str) -> Result<String, Box<dyn Error>> {
+        let mut index = self.repository.index()?;  // 获取当前索引（暂存区）
+        let tree_id = index.write_tree()?;     // 从索引创建树
+        let tree = self.repository.find_tree(tree_id)?;
+
+        let signature = self.repository.signature()?;
+
+        // 获取当前HEAD作为父提交
+        let parent_commit = self.repository.head()?.peel_to_commit()?;
+
+        let commit_id = self.repository.commit(
+            Some("HEAD"),
+            &signature,
+            &signature,
+            message,
+            &tree,
+            &[&parent_commit],  // 包含父提交
+        )?;
+
+        println!("New commit created: {}", commit_id);
+        return Ok(commit_id.to_string());
     }
 
 }
