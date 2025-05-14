@@ -16,17 +16,12 @@ pub struct DeepSeekConfig {
 
 
 pub fn load_config() -> Result<AppConfig, Box<dyn std::error::Error>> {
-    // Try current directory first
     let current_dir_config = Path::new("config.toml");
-
-    // Then try home directory
     let home = env::var("HOME").map_err(|_| "HOME environment variable not set")?;
-    let home_config = Path::new(&home).join("config.toml");
-
+    let home_config = Path::new(&home).join(".config").join("git-github").join("config.toml");
     let cfg = Config::builder()
         .add_source(File::from(current_dir_config).required(false))
         .add_source(File::from(home_config).required(false))
         .build()?;
-
     Ok(cfg.try_deserialize()?)
 }
