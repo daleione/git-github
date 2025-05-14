@@ -3,7 +3,7 @@ use futures::StreamExt;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
-use std::{default, env};
+use std::env;
 
 /// 主函数：生成 AI Commit 信息
 pub fn ai_commit(apply: bool) -> Result<(), Box<dyn Error>> {

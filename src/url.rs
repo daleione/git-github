@@ -30,6 +30,7 @@ fn repo_parser(input: &str) -> IResult<&str, &str> {
     alt((terminated(take_until(".git"), peek(tag(".git"))), rest))(input)
 }
 
+#[allow(dead_code)]
 pub enum Platform {
     Github,
     Gitlab,
@@ -42,6 +43,7 @@ pub enum Platform {
 //  * https://xxx.com/user/repo.git
 #[derive(Debug, Default)]
 pub struct Remote {
+    #[allow(dead_code)]
     pub schema: String,
     pub host: String,
     pub user: String,
@@ -64,10 +66,12 @@ impl Remote {
         }
     }
 
+    #[allow(dead_code)]
     pub fn is_git(&self) -> bool {
         self.schema == "git"
     }
 
+    #[allow(dead_code)]
     pub fn is_http(&self) -> bool {
         let http_schemas: [&str; 2] = ["http", "https"];
         if http_schemas.iter().any(|&s| s == self.schema) {
@@ -76,6 +80,7 @@ impl Remote {
         false
     }
 
+    #[allow(dead_code)]
     pub fn get_platform(&self) -> Platform {
         match self.host.as_str() {
             "github.com" => Platform::Github,
