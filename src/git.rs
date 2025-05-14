@@ -73,10 +73,8 @@ impl Repo {
 
         let mut changes = String::new();
 
-        // 获取 HEAD（上一次 commit）对应的 tree
         let head_tree = self.repository.head()?.peel_to_tree().ok();
 
-        // 比较 HEAD 和 index（暂存区）之间的差异
         let diff = self
             .repository
             .diff_tree_to_index(head_tree.as_ref(), None, None)?;
@@ -85,7 +83,6 @@ impl Repo {
             let status = entry.status();
             let path = entry.path().unwrap_or("");
 
-            // 只处理 index 中的更改（即被 git add 的）
             if !(status.is_index_new() || status.is_index_modified() || status.is_index_deleted()) {
                 continue;
             }
@@ -102,7 +99,6 @@ impl Repo {
 
             changes.push_str(&format!("{}: {}\n", status_desc, path));
 
-            // 查找该文件的 diff
             for delta in diff.deltas() {
                 let delta_path = delta.new_file().path().or_else(|| delta.old_file().path());
                 if delta_path == Some(std::path::Path::new(path)) {
@@ -128,13 +124,12 @@ impl Repo {
     }
 
     pub fn commit(&self, message: &str) -> Result<String, Box<dyn Error>> {
-        let mut index = self.repository.index()?; // 获取当前索引（暂存区）
-        let tree_id = index.write_tree()?; // 从索引创建树
+        let mut index = self.repository.index()?;
+        let tree_id = index.write_tree()?;
         let tree = self.repository.find_tree(tree_id)?;
 
         let signature = self.repository.signature()?;
 
-        // 获取当前HEAD作为父提交
         let parent_commit = self.repository.head()?.peel_to_commit()?;
 
         let commit_id = self.repository.commit(
@@ -143,10 +138,9 @@ impl Repo {
             &signature,
             message,
             &tree,
-            &[&parent_commit], // 包含父提交
+            &[&parent_commit],
         )?;
 
-        println!("New commit created: {}", commit_id);
         return Ok(commit_id.to_string());
     }
 }

@@ -5,16 +5,14 @@ use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::env;
 
-/// 主函数：生成 AI Commit 信息
 pub fn ai_commit(apply: bool) -> Result<(), Box<dyn Error>> {
-    let path = env::current_dir().map_err(|_| "无法获取当前目录")?;
+    let path = env::current_dir().map_err(|_| "Failed to get current directory")?;
     let repo = git::Repo::new(&path);
     let changes = repo.get_staged_git_changes()?;
-
-    let config = crate::config::load_config()?; // 加载配置
+    let config = crate::config::load_config()?;
     let messages = build_prompt_messages(&changes, config.deepseek.prompt);
 
-    println!("\nAI 建议的 Commit 信息：");
+    println!("\nAI suggested commit message:");
 
     let rt = tokio::runtime::Runtime::new()?;
 
@@ -34,15 +32,13 @@ pub fn ai_commit(apply: bool) -> Result<(), Box<dyn Error>> {
     })?;
 
     if apply {
-        println!("\n\n正在使用 git2 执行 commit ...");
+        println!("\n\nExecuting commit...");
         let commit_id = repo.commit(&full_message)?;
-        println!("✅ Commit 完成，ID: {}", commit_id);
+        println!("✅ Commit successful, ID: {}", commit_id);
     }
-
     Ok(())
 }
 
-/// 构造 ChatMessage 请求体
 fn build_prompt_messages(changes: &str, prompt_opt: Option<String>) -> Vec<ChatMessage> {
     let mut prompt = "You are a helpful assistant that generates clear and concise Git commit messages based on the changes provided.
 Follow these rules:
@@ -66,7 +62,6 @@ Follow these rules:
     ]
 }
 
-/// Chat 请求结构体
 #[derive(Debug, Serialize)]
 struct ChatMessage {
     role: String,
@@ -81,7 +76,6 @@ struct ChatRequest {
     temperature: Option<f32>,
 }
 
-/// Chat 响应结构体
 #[derive(Debug, Deserialize)]
 struct StreamResponseChunk {
     choices: Vec<StreamChoice>,
@@ -97,7 +91,6 @@ struct DeltaMessage {
     content: Option<String>,
 }
 
-/// 流式调用 DeepSeek API，返回 Commit 信息
 async fn stream_commit_message(
     api_key: &str,
     messages: Vec<ChatMessage>,
@@ -122,7 +115,7 @@ async fn stream_commit_message(
 
     if !response.status().is_success() {
         let err_msg = response.text().await?;
-        return Err(format!("API 请求失败: {}", err_msg).into());
+        return Err(format!("API failed: {}", err_msg).into());
     }
 
     let mut stream = response.bytes_stream();
