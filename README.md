@@ -1,90 +1,96 @@
-# git-github-open
+# Git-GitHub CLI Tool
 
-`git-github-open` is a convenient Git command plugin that allows you to quickly open the remote repository URL in your browser. It supports both GitHub and GitLab, making it easier for developers to access remote repositories, specific branches, or commit records for code review, changes, or sharing.
+A command-line tool for interacting with Git repositories, featuring quick access to repo pages, issue management, and AI-powered commits.
 
 ## Features
-- **Multi-Platform Support**: Opens remote repository URLs for GitHub and GitLab.
-- **Quick Branch Access**: Specify a branch to open.
-- **View Specific Commits**: Open a specific commit page directly.
-- **Custom Remote Repository**: Specify different remote names (default is `origin`).
+
+- **Open repo pages** directly from your terminal
+  - Repository homepage
+  - Specific branches
+  - Specific commits
+- **Issue management**
+  - Focus on specific issues
+  - List all repository issues
+- **AI-powered commits** with automatically generated messages
 
 ## Installation
 
 ```bash
-# Install using `cargo`
 cargo install git-github
 ```
 
 ## Usage
 
-### Open the default remote repository page
-Run the following command in the root directory of your repository to open the main page of the remote repository in your browser:
+```bash
+git-github [OPTIONS] <COMMAND>
+```
+
+### Options
+
+- `-d`, `--debug`: Turn debugging information on (can be used multiple times to increase verbosity)
+
+### Commands
+
+#### Open
+
+Open the repo website in your browser:
 
 ```bash
-git github open
+git-github open [OPTIONS]
 ```
-
-### Open a specific branch page
-Use the `-b` or `--branch` option to open a specific branch. For example, to open the `develop` branch:
-
-```bash
-git github open --branch develop
-```
-
-### Open a specific commit page
-Use the `-c` or `--commit` option to open a specific commit page. For example, to open a commit with ID `abc1234`:
-
-```bash
-git github open --commit abc1234
-```
-
-### Specify a remote repository name
-If the remote repository name is not `origin`, you can use the `-r` or `--remote` option to specify it. For example:
-
-```bash
-git github open --remote upstream
-```
-
-## Full Options List
-
-```
-Usage: git-github open [OPTIONS]
 
 Options:
-  -c, --commit <COMMIT>    Open a specific commit page
-  -b, --branch <BRANCH>    Open a specific branch page
-  -r, --remote <REMOTE>    Specify the remote repository name (default: origin)
-  -h, --help               Print help
+- `-c`, `--commit <COMMIT>`: Open a specific commit (conflicts with branch)
+- `-b`, `--branch <BRANCH>`: Open a specific branch
+- `-r`, `--remote <REMOTE>`: Specify remote name (default: "origin")
+
+Examples:
+```bash
+git-github open                     # Opens the repo homepage
+git-github open -b main             # Opens the main branch
+git-github open -c abc123           # Opens commit abc123
+git-github open -r upstream -b dev  # Opens dev branch on upstream remote
 ```
 
-## Examples
+#### Issue
 
-1. **Open the repository homepage**
-   ```bash
-   git github open
-   ```
-   This will open the homepage of the `origin` remote repository by default.
+Manage GitHub issues:
 
-2. **Open the `develop` branch**
-   ```bash
-   git github open --branch develop
-   ```
-   This will open the `develop` branch of the `origin` remote repository.
+```bash
+git-github issue <COMMAND>
+```
 
-3. **View a specific commit**
-   ```bash
-   git github open --commit abc1234
-   ```
-   This will open the specific commit page for commit ID `abc1234`.
+Subcommands:
+- `focus`: Focus on a specific issue
+  ```bash
+  git-github issue focus -i <ISSUE_ID>
+  ```
+- `list`: List all issues
+  ```bash
+  git-github issue list
+  ```
 
-4. **Specify a remote name**
-   ```bash
-   git github open --remote upstream
-   ```
-   This will open the homepage of the `upstream` remote repository.
+#### Commit
+
+Create an AI-generated commit:
+
+```bash
+git-github commit [OPTIONS]
+```
+
+Options:
+- `-a`, `--apply`: Apply the AI-generated message to the new commit (default: false)
+
+Examples:
+```bash
+git-github commit       # Shows AI-generated message without committing
+git-github commit -a    # Creates commit with AI-generated message
+```
 
 ## Contributing
-We welcome contributions via Issues or Pull Requests! If you have any questions or suggestions, feel free to reach out.
+
+Pull requests are welcome! For major changes, please open an issue first to discuss what you'd like to change.
 
 ## License
-This project is licensed under the MIT License.
+
+[MIT](https://choosealicense.com/licenses/mit/)
