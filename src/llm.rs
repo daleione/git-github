@@ -2,8 +2,28 @@ use crate::git;
 use futures::StreamExt;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use std::error::Error;
 use std::env;
+use std::error::Error;
+
+fn print_banner(title: &str) {
+    let max_width = 100;
+    let min_width = 60;
+    let padding = 4;
+    let raw_width = title.len() + padding * 2;
+    let total_width = std::cmp::min(max_width, std::cmp::max(min_width, raw_width));
+    let banner_line = "=".repeat(total_width);
+
+    let title_padding = (total_width - title.len()) / 2;
+
+    println!("{}", banner_line);
+    println!(
+        "{}{}{}",
+        " ".repeat(title_padding),
+        title,
+        " ".repeat(total_width - title_padding - title.len())
+    );
+    println!("{}", banner_line);
+}
 
 pub fn ai_commit(apply: bool) -> Result<(), Box<dyn Error>> {
     let path = env::current_dir().map_err(|_| "Failed to get current directory")?;
@@ -12,11 +32,11 @@ pub fn ai_commit(apply: bool) -> Result<(), Box<dyn Error>> {
     let config = crate::config::load_config()?;
     let messages = build_prompt_messages(&changes, config.deepseek.prompt);
 
-    println!("\nAI suggested commit message:");
+    print_banner("AI Suggested Commit Message");
 
     let rt = tokio::runtime::Runtime::new()?;
-
     let mut full_message = String::new();
+    let mut current_line = String::new();
 
     rt.block_on(async {
         stream_commit_message(
@@ -24,28 +44,51 @@ pub fn ai_commit(apply: bool) -> Result<(), Box<dyn Error>> {
             messages,
             config.deepseek.temperature,
             |content| {
-                print!("{}", content);
-                full_message.push_str(&content);
+                for ch in content.chars() {
+                    current_line.push(ch);
+                    if ch == '\n' {
+                        print!("| {}\n", current_line.trim_end());
+                        full_message.push_str(&current_line);
+                        current_line.clear();
+                    }
+                }
             },
         )
         .await
     })?;
 
-    if apply {
-        println!("\n\nExecuting commit...");
-        let commit_id = repo.commit(&full_message)?;
-        println!("✅ Commit successful, ID: {}", commit_id);
+    if !current_line.trim().is_empty() {
+        println!("| {}", current_line.trim_end());
+        full_message.push_str(&current_line);
     }
+
+    if apply {
+        let commit_id = repo.commit(&full_message.trim())?;
+        print_banner("✅ Commit Successful");
+        println!("Commit ID: {}\n", commit_id);
+    }
+
     Ok(())
 }
 
 fn build_prompt_messages(changes: &str, prompt_opt: Option<String>) -> Vec<ChatMessage> {
-    let mut prompt = "You are a helpful assistant that generates clear and concise Git commit messages based on the changes provided.
-Follow these rules:
-1. Use imperative mood (e.g., 'Fix bug' not 'Fixed bug')
-2. Keep it short (50 chars or less) for the title
-3. Optionally add a longer description after a blank line
-4. Focus on what changed, not why".to_string();
+    let mut prompt = r#"
+You are an AI commit message assistant.
+
+Please generate a commit message with the following format:
+1. Title (one short sentence, 50-72 characters max).
+2. A clear bullet-point list of changes (start each line with "- ").
+3. Each line, including bullets, should be under 100 characters.
+4. Keep it concise, consistent, and professional.
+
+Example:
+
+Improve error handling in user authentication
+
+- Add detailed error messages for login failures
+- Handle timeout errors gracefully
+- Refactor error propagation logic for clarity
+"#.to_string();
     if let Some(config_prompt) = prompt_opt {
         prompt = config_prompt;
     }
