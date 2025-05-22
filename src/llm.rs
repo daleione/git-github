@@ -88,7 +88,8 @@ Improve error handling in user authentication
 - Add detailed error messages for login failures
 - Handle timeout errors gracefully
 - Refactor error propagation logic for clarity
-"#.to_string();
+"#
+    .to_string();
     if let Some(config_prompt) = prompt_opt {
         prompt = config_prompt;
     }

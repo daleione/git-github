@@ -2,7 +2,7 @@ use std::error::Error;
 use std::path::PathBuf;
 
 use crate::url::Remote;
-use git2::{Repository, StatusOptions};
+use git2::{DiffFormat, Repository, StatusOptions};
 use octocrab::models::issues::Issue;
 use octocrab::Page;
 
@@ -67,13 +67,11 @@ impl Repo {
         opts.include_untracked(false);
         opts.include_ignored(false);
         opts.include_unmodified(false);
-        opts.include_untracked(false);
 
         let statuses = self.repository.statuses(Some(&mut opts))?;
-
         let mut changes = String::new();
 
-        let head_tree = self.repository.head()?.peel_to_tree().ok();
+        let head_tree = self.repository.head().ok().and_then(|h| h.peel_to_tree().ok());
 
         let diff = self
             .repository
@@ -103,11 +101,10 @@ impl Repo {
                 let delta_path = delta.new_file().path().or_else(|| delta.old_file().path());
                 if delta_path == Some(std::path::Path::new(path)) {
                     let mut diff_text = String::new();
-                    diff.print(git2::DiffFormat::Patch, |_, _, line| {
+                    diff.print(DiffFormat::Patch, |_, _, line| {
                         diff_text.push_str(std::str::from_utf8(line.content()).unwrap_or(""));
                         true
                     })?;
-
                     if !diff_text.is_empty() {
                         changes.push_str(&format!("\n{}\n", diff_text));
                     }
@@ -116,7 +113,7 @@ impl Repo {
             }
         }
 
-        if changes.is_empty() {
+        if changes.trim().is_empty() {
             changes = "No staged changes found.".to_string();
         }
 
