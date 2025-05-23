@@ -80,7 +80,9 @@ fn main() {
                 }
             },
             Commands::Commit { apply } => {
-                let _ = llm::ai_commit(*apply);
+                if let Err(msg) = llm::ai_commit(*apply) {
+                    eprint!("{:?}", msg);
+                }
             }
         }
     }

@@ -114,7 +114,7 @@ impl Repo {
         }
 
         if changes.trim().is_empty() {
-            changes = "No staged changes found.".to_string();
+            return Err("No staged changes found.".into());
         }
 
         Ok(changes)
