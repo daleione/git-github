@@ -31,7 +31,9 @@ pub fn ai_commit(apply: bool) -> Result<(), Box<dyn Error>> {
     let changes = repo.get_staged_git_changes()?;
     let config = crate::config::load_config()?;
     if config.deepseek.api_key.is_empty() {
-        return Err("Error: No DeepSeek API key found. Please set your API key in the config file.".into());
+        return Err(
+            "Error: No DeepSeek API key found. Please set your API key in the config file.".into(),
+        );
     }
 
     let messages = build_prompt_messages(&changes, config.deepseek.prompt);

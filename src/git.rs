@@ -1,8 +1,8 @@
 use std::error::Error;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::url::Remote;
-use git2::{DiffFormat, Repository, StatusOptions};
+use git2::{DiffFormat, Delta, Repository, StatusOptions};
 use octocrab::models::issues::Issue;
 use octocrab::Page;
 
@@ -71,7 +71,11 @@ impl Repo {
         let statuses = self.repository.statuses(Some(&mut opts))?;
         let mut changes = String::new();
 
-        let head_tree = self.repository.head().ok().and_then(|h| h.peel_to_tree().ok());
+        let head_tree = self
+            .repository
+            .head()
+            .ok()
+            .and_then(|h| h.peel_to_tree().ok());
 
         let diff = self
             .repository
@@ -95,21 +99,42 @@ impl Repo {
                 continue;
             };
 
-            changes.push_str(&format!("{}: {}\n", status_desc, path));
+            let mut printed = false;
 
             for delta in diff.deltas() {
-                let delta_path = delta.new_file().path().or_else(|| delta.old_file().path());
-                if delta_path == Some(std::path::Path::new(path)) {
-                    let mut diff_text = String::new();
-                    diff.print(DiffFormat::Patch, |_, _, line| {
-                        diff_text.push_str(std::str::from_utf8(line.content()).unwrap_or(""));
-                        true
-                    })?;
-                    if !diff_text.is_empty() {
-                        changes.push_str(&format!("\n{}\n", diff_text));
+                let old_path = delta.old_file().path();
+                let new_path = delta.new_file().path();
+
+                if new_path == Some(Path::new(path)) || old_path == Some(Path::new(path)) {
+                    if delta.status() == Delta::Renamed {
+                        if let (Some(old), Some(new)) = (old_path, new_path) {
+                            changes.push_str(&format!(
+                                "Renamed: {} -> {}\n",
+                                old.display(),
+                                new.display()
+                            ));
+                            printed = true;
+                        }
+                    } else {
+                        changes.push_str(&format!("{}: {}\n", status_desc, path));
+
+                        let mut diff_text = String::new();
+                        diff.print(DiffFormat::Patch, |_, _, line| {
+                            diff_text.push_str(std::str::from_utf8(line.content()).unwrap_or(""));
+                            true
+                        })?;
+                        if !diff_text.is_empty() {
+                            changes.push_str(&format!("\n{}\n", diff_text));
+                        }
+                        printed = true;
                     }
+
                     break;
                 }
+            }
+
+            if !printed {
+                changes.push_str(&format!("{}: {}\n", status_desc, path));
             }
         }
 
