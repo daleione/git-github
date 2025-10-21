@@ -34,9 +34,13 @@ enum Commands {
 
     /// auto commit with message gened by ai
     Commit {
-        /// apply the message to the new commit
-        #[clap(short, long, default_value_t = false)]
-        apply: bool,
+        /// Auto-generate and apply commit message directly
+        #[clap(short = 'a', long)]
+        auto: bool,
+
+        /// Generate commit message and open editor for modification
+        #[clap(short = 'm', long)]
+        message: bool,
     },
 }
 
@@ -79,9 +83,17 @@ fn main() {
                     let _ = focus::list_issues("origin");
                 }
             },
-            Commands::Commit { apply } => {
-                if let Err(msg) = llm::ai_commit(*apply) {
-                    eprint!("{:?}", msg);
+            Commands::Commit { auto, message } => {
+                if *auto {
+                    if let Err(msg) = llm::ai_commit(true) {
+                        eprint!("{:?}", msg);
+                    }
+                } else if *message {
+                    if let Err(msg) = llm::ai_commit_with_editor() {
+                        eprint!("{:?}", msg);
+                    }
+                } else {
+                    eprintln!("Error: Please specify either -a (auto) or -m (message) flag");
                 }
             }
         }

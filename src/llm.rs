@@ -4,6 +4,8 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::error::Error;
+use std::fs;
+use std::process::Command;
 
 fn print_banner(title: &str) {
     let max_width = 100;
@@ -73,6 +75,73 @@ pub fn ai_commit(apply: bool) -> Result<(), Box<dyn Error>> {
         print_banner("✅ Commit Successful");
         println!("Commit ID: {}\n", commit_id);
     }
+
+    Ok(())
+}
+
+pub fn ai_commit_with_editor() -> Result<(), Box<dyn Error>> {
+    let path = env::current_dir().map_err(|_| "Failed to get current directory")?;
+    let repo = git::Repo::new(&path);
+    let changes = repo.get_staged_git_changes()?;
+    let config = crate::config::load_config()?;
+    if config.deepseek.api_key.is_empty() {
+        return Err(
+            "Error: No DeepSeek API key found. Please set your API key in the config file.".into(),
+        );
+    }
+
+    let messages = build_prompt_messages(&changes, config.deepseek.prompt);
+
+    print_banner("AI Generating Commit Message");
+
+    let rt = tokio::runtime::Runtime::new()?;
+    let mut full_message = String::new();
+    let mut current_line = String::new();
+
+    rt.block_on(async {
+        stream_commit_message(
+            &config.deepseek.api_key,
+            messages,
+            config.deepseek.temperature,
+            |content| {
+                for ch in content.chars() {
+                    current_line.push(ch);
+                    if ch == '\n' {
+                        print!("| {}\n", current_line.trim_end());
+                        full_message.push_str(&current_line);
+                        current_line.clear();
+                    }
+                }
+            },
+        )
+        .await
+    })?;
+
+    if !current_line.trim().is_empty() {
+        println!("| {}", current_line.trim_end());
+        full_message.push_str(&current_line);
+    }
+
+    // Create a temporary file with the AI-generated message
+    let temp_file = env::temp_dir().join("git_github_commit_msg.txt");
+    fs::write(&temp_file, full_message.trim())?;
+
+    print_banner("Opening Editor for Review");
+
+    // Open git commit with the pre-filled message using -t flag and -v for verbose
+    let status = Command::new("git")
+        .args(&["commit", "-v", "-t"])
+        .arg(&temp_file)
+        .status()?;
+
+    // Clean up the temporary file
+    let _ = fs::remove_file(&temp_file);
+
+    if !status.success() {
+        return Err("Git commit was cancelled or failed".into());
+    }
+
+    print_banner("✅ Commit Completed");
 
     Ok(())
 }
