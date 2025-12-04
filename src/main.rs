@@ -84,12 +84,12 @@ fn main() {
                 }
             },
             Commands::Commit { auto, message } => {
-                if *auto {
-                    if let Err(msg) = llm::ai_commit(true) {
+                if *message {
+                    if let Err(msg) = llm::ai_commit_with_editor() {
                         eprint!("{:?}", msg);
                     }
-                } else if *message {
-                    if let Err(msg) = llm::ai_commit_with_editor() {
+                } else if *auto {
+                    if let Err(msg) = llm::ai_commit(true) {
                         eprint!("{:?}", msg);
                     }
                 } else {

@@ -128,10 +128,14 @@ pub fn ai_commit_with_editor() -> Result<(), Box<dyn Error>> {
 
     print_banner("Opening Editor for Review");
 
-    // Open git commit with the pre-filled message using -t flag and -v for verbose
+    // Open git commit with the pre-filled message using -e flag to force editor
+    // and inherit stdio to allow interactive editing
     let status = Command::new("git")
-        .args(&["commit", "-v", "-t"])
+        .args(&["commit", "-e", "-v", "--template"])
         .arg(&temp_file)
+        .stdin(std::process::Stdio::inherit())
+        .stdout(std::process::Stdio::inherit())
+        .stderr(std::process::Stdio::inherit())
         .status()?;
 
     // Clean up the temporary file
