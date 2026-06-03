@@ -1,3 +1,4 @@
+use crate::config::AppConfig;
 use crate::git;
 use futures::StreamExt;
 use reqwest::Client;
@@ -27,9 +28,16 @@ fn print_banner(title: &str) {
     println!("{}", banner_line);
 }
 
-pub fn ai_commit(apply: bool) -> Result<(), Box<dyn Error>> {
+/// Open the repo, optionally stage all changes, then load+validate config and
+/// collect the staged diff. Shared setup for every commit entry point.
+fn prepare(stage: bool) -> Result<(git::Repo, String, AppConfig), Box<dyn Error>> {
     let path = env::current_dir().map_err(|_| "Failed to get current directory")?;
     let repo = git::Repo::new(&path);
+
+    if stage {
+        repo.stage_all()?;
+    }
+
     let changes = repo.get_staged_git_changes()?;
     let config = crate::config::load_config()?;
     if config.deepseek.api_key.is_empty() {
@@ -38,30 +46,31 @@ pub fn ai_commit(apply: bool) -> Result<(), Box<dyn Error>> {
         );
     }
 
-    let messages = build_prompt_messages(&changes, config.deepseek.prompt);
+    Ok((repo, changes, config))
+}
 
-    print_banner("AI Suggested Commit Message");
-
+/// Stream the AI response, echoing each completed line as `| ...`, and return
+/// the full message.
+fn stream_and_collect(
+    api_key: &str,
+    messages: Vec<ChatMessage>,
+    temperature: Option<f32>,
+) -> Result<String, Box<dyn Error>> {
     let rt = tokio::runtime::Runtime::new()?;
     let mut full_message = String::new();
     let mut current_line = String::new();
 
     rt.block_on(async {
-        stream_commit_message(
-            &config.deepseek.api_key,
-            messages,
-            config.deepseek.temperature,
-            |content| {
-                for ch in content.chars() {
-                    current_line.push(ch);
-                    if ch == '\n' {
-                        print!("| {}\n", current_line.trim_end());
-                        full_message.push_str(&current_line);
-                        current_line.clear();
-                    }
+        stream_commit_message(api_key, messages, temperature, |content| {
+            for ch in content.chars() {
+                current_line.push(ch);
+                if ch == '\n' {
+                    println!("| {}", current_line.trim_end());
+                    full_message.push_str(&current_line);
+                    current_line.clear();
                 }
-            },
-        )
+            }
+        })
         .await
     })?;
 
@@ -70,8 +79,19 @@ pub fn ai_commit(apply: bool) -> Result<(), Box<dyn Error>> {
         full_message.push_str(&current_line);
     }
 
+    Ok(full_message)
+}
+
+pub fn ai_commit(stage: bool, apply: bool) -> Result<(), Box<dyn Error>> {
+    let (repo, changes, config) = prepare(stage)?;
+    let messages = build_prompt_messages(&changes, config.deepseek.prompt);
+
+    print_banner("AI Suggested Commit Message");
+    let full_message =
+        stream_and_collect(&config.deepseek.api_key, messages, config.deepseek.temperature)?;
+
     if apply {
-        let commit_id = repo.commit(&full_message.trim())?;
+        let commit_id = repo.commit(full_message.trim())?;
         print_banner("✅ Commit Successful");
         println!("Commit ID: {}\n", commit_id);
     }
@@ -79,48 +99,13 @@ pub fn ai_commit(apply: bool) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-pub fn ai_commit_with_editor() -> Result<(), Box<dyn Error>> {
-    let path = env::current_dir().map_err(|_| "Failed to get current directory")?;
-    let repo = git::Repo::new(&path);
-    let changes = repo.get_staged_git_changes()?;
-    let config = crate::config::load_config()?;
-    if config.deepseek.api_key.is_empty() {
-        return Err(
-            "Error: No DeepSeek API key found. Please set your API key in the config file.".into(),
-        );
-    }
-
+pub fn ai_commit_with_editor(stage: bool) -> Result<(), Box<dyn Error>> {
+    let (_repo, changes, config) = prepare(stage)?;
     let messages = build_prompt_messages(&changes, config.deepseek.prompt);
 
     print_banner("AI Generating Commit Message");
-
-    let rt = tokio::runtime::Runtime::new()?;
-    let mut full_message = String::new();
-    let mut current_line = String::new();
-
-    rt.block_on(async {
-        stream_commit_message(
-            &config.deepseek.api_key,
-            messages,
-            config.deepseek.temperature,
-            |content| {
-                for ch in content.chars() {
-                    current_line.push(ch);
-                    if ch == '\n' {
-                        print!("| {}\n", current_line.trim_end());
-                        full_message.push_str(&current_line);
-                        current_line.clear();
-                    }
-                }
-            },
-        )
-        .await
-    })?;
-
-    if !current_line.trim().is_empty() {
-        println!("| {}", current_line.trim_end());
-        full_message.push_str(&current_line);
-    }
+    let full_message =
+        stream_and_collect(&config.deepseek.api_key, messages, config.deepseek.temperature)?;
 
     // Create a temporary file with the AI-generated message
     let temp_file = env::temp_dir().join("git_github_commit_msg.txt");

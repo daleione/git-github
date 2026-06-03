@@ -1,8 +1,8 @@
 use std::error::Error;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use crate::url::Remote;
-use git2::{DiffFormat, Delta, Repository, StatusOptions};
+use git2::{Delta, IndexAddOption, Patch, Repository};
 use octocrab::models::issues::Issue;
 use octocrab::Page;
 
@@ -62,79 +62,66 @@ impl Repo {
         Ok(issue_list)
     }
 
+    /// Stage every change in the working tree (equivalent to `git add -A`):
+    /// new and modified files via `add_all`, deletions via `update_all`.
+    pub fn stage_all(&self) -> Result<(), Box<dyn Error>> {
+        let mut index = self.repository.index()?;
+        index.add_all(["*"].iter(), IndexAddOption::DEFAULT, None)?;
+        index.update_all(["*"].iter(), None)?;
+        index.write()?;
+        Ok(())
+    }
+
     pub fn get_staged_git_changes(&self) -> Result<String, Box<dyn Error>> {
-        let mut opts = StatusOptions::new();
-        opts.include_untracked(false);
-        opts.include_ignored(false);
-        opts.include_unmodified(false);
-
-        let statuses = self.repository.statuses(Some(&mut opts))?;
-        let mut changes = String::new();
-
         let head_tree = self
             .repository
             .head()
             .ok()
             .and_then(|h| h.peel_to_tree().ok());
 
+        // Tree(HEAD) -> index is exactly the set of staged changes.
         let diff = self
             .repository
             .diff_tree_to_index(head_tree.as_ref(), None, None)?;
 
-        for entry in statuses.iter() {
-            let status = entry.status();
-            let path = entry.path().unwrap_or("");
+        let mut changes = String::new();
 
-            if !(status.is_index_new() || status.is_index_modified() || status.is_index_deleted()) {
-                continue;
-            }
+        for (idx, delta) in diff.deltas().enumerate() {
+            let old_path = delta.old_file().path();
+            let new_path = delta.new_file().path();
 
-            let status_desc = if status.is_index_new() {
-                "Staged (new)"
-            } else if status.is_index_modified() {
-                "Staged (modified)"
-            } else if status.is_index_deleted() {
-                "Staged (deleted)"
-            } else {
-                continue;
-            };
-
-            let mut printed = false;
-
-            for delta in diff.deltas() {
-                let old_path = delta.old_file().path();
-                let new_path = delta.new_file().path();
-
-                if new_path == Some(Path::new(path)) || old_path == Some(Path::new(path)) {
-                    if delta.status() == Delta::Renamed {
-                        if let (Some(old), Some(new)) = (old_path, new_path) {
-                            changes.push_str(&format!(
-                                "Renamed: {} -> {}\n",
-                                old.display(),
-                                new.display()
-                            ));
-                            printed = true;
-                        }
-                    } else {
-                        changes.push_str(&format!("{}: {}\n", status_desc, path));
-
-                        let mut diff_text = String::new();
-                        diff.print(DiffFormat::Patch, |_, _, line| {
-                            diff_text.push_str(std::str::from_utf8(line.content()).unwrap_or(""));
-                            true
-                        })?;
-                        if !diff_text.is_empty() {
-                            changes.push_str(&format!("\n{}\n", diff_text));
-                        }
-                        printed = true;
+            match delta.status() {
+                Delta::Added => {
+                    if let Some(p) = new_path {
+                        changes.push_str(&format!("Staged (new): {}\n", p.display()));
                     }
-
-                    break;
                 }
+                Delta::Modified => {
+                    if let Some(p) = new_path {
+                        changes.push_str(&format!("Staged (modified): {}\n", p.display()));
+                    }
+                }
+                Delta::Deleted => {
+                    if let Some(p) = old_path {
+                        changes.push_str(&format!("Staged (deleted): {}\n", p.display()));
+                    }
+                }
+                Delta::Renamed => {
+                    if let (Some(old), Some(new)) = (old_path, new_path) {
+                        changes
+                            .push_str(&format!("Renamed: {} -> {}\n", old.display(), new.display()));
+                    }
+                }
+                _ => continue,
             }
 
-            if !printed {
-                changes.push_str(&format!("{}: {}\n", status_desc, path));
+            // Print only this file's patch, not the whole diff.
+            if let Ok(Some(mut patch)) = Patch::from_diff(&diff, idx) {
+                let buf = patch.to_buf()?;
+                let text = String::from_utf8_lossy(&buf);
+                if !text.trim().is_empty() {
+                    changes.push_str(&format!("\n{}\n", text));
+                }
             }
         }
 

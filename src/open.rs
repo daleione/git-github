@@ -31,10 +31,15 @@ pub fn open(remote_name: &str, target: OpenTarget) {
         }
     }
 
-    let mut target = target;
-    if let Ok(current_branch) = repo.current_branch() {
-        target = OpenTarget::Branch(current_branch);
-    }
+    // An explicit -c/-b target is honored as-is. A bare `open` (Remote)
+    // defaults to the current branch when on one, else the repo homepage.
+    let target = match target {
+        OpenTarget::Remote => match repo.current_branch() {
+            Ok(current_branch) => OpenTarget::Branch(current_branch),
+            Err(_) => OpenTarget::Remote,
+        },
+        other => other,
+    };
 
     match get_remote(remote_name) {
         Ok(remote) => {

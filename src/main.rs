@@ -32,15 +32,15 @@ enum Commands {
         issue_command: IssueCommands,
     },
 
-    /// auto commit with message gened by ai
+    /// Generate a commit message with AI. Bare `commit` previews only.
     Commit {
-        /// Auto-generate and apply commit message directly
+        /// Stage all changes (like `git add -A`) before committing
         #[clap(short = 'a', long)]
-        auto: bool,
+        all: bool,
 
-        /// Generate commit message and open editor for modification
-        #[clap(short = 'm', long)]
-        message: bool,
+        /// Open the editor to review/edit the message before committing
+        #[clap(short = 'e', long)]
+        edit: bool,
     },
 }
 
@@ -83,17 +83,19 @@ fn main() {
                     let _ = focus::list_issues("origin");
                 }
             },
-            Commands::Commit { auto, message } => {
-                if *message {
-                    if let Err(msg) = llm::ai_commit_with_editor() {
-                        eprint!("{:?}", msg);
-                    }
-                } else if *auto {
-                    if let Err(msg) = llm::ai_commit(true) {
-                        eprint!("{:?}", msg);
-                    }
+            Commands::Commit { all, edit } => {
+                let result = if *edit {
+                    // -e: generate, then open editor (optionally staging first with -a)
+                    llm::ai_commit_with_editor(*all)
+                } else if *all {
+                    // -a: stage everything, generate, and commit
+                    llm::ai_commit(true, true)
                 } else {
-                    eprintln!("Error: Please specify either -a (auto) or -m (message) flag");
+                    // bare: preview the message only, no staging, no commit
+                    llm::ai_commit(false, false)
+                };
+                if let Err(msg) = result {
+                    eprintln!("{}", msg);
                 }
             }
         }
