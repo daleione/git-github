@@ -1,10 +1,8 @@
 use std::error::Error;
 use std::path::PathBuf;
 
-use crate::url::Remote;
+use crate::remote::Remote;
 use git2::{Delta, IndexAddOption, Patch, Repository};
-use octocrab::models::issues::Issue;
-use octocrab::Page;
 
 /// Per-file diff size cap sent to the AI. Larger diffs are omitted.
 const MAX_FILE_DIFF_BYTES: usize = 16 * 1024;
@@ -73,17 +71,6 @@ impl Repo {
         } else {
             Err("Could not get current branch name".into())
         }
-    }
-
-    pub async fn issues(&self) -> Result<Page<Issue>, Box<dyn Error>> {
-        let octocrab = octocrab::instance();
-        let remote = self.remote("origin")?;
-        let issue_list = octocrab
-            .issues(remote.user, remote.repo)
-            .list()
-            .send()
-            .await?;
-        Ok(issue_list)
     }
 
     /// Stage every change in the working tree (equivalent to `git add -A`):

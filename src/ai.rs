@@ -1,5 +1,5 @@
 use crate::config::AppConfig;
-use crate::git;
+use crate::repo::Repo;
 use futures::StreamExt;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -30,9 +30,9 @@ fn print_banner(title: &str) {
 
 /// Open the repo, optionally stage all changes, then load+validate config and
 /// collect the staged diff. Shared setup for every commit entry point.
-fn prepare(stage: bool) -> Result<(git::Repo, String, AppConfig), Box<dyn Error>> {
+fn prepare(stage: bool) -> Result<(Repo, String, AppConfig), Box<dyn Error>> {
     let path = env::current_dir().map_err(|_| "Failed to get current directory")?;
-    let repo = git::Repo::new(&path);
+    let repo = Repo::new(&path);
 
     if stage {
         repo.stage_all()?;

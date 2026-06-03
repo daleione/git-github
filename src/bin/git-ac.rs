@@ -1,5 +1,5 @@
 use clap::Parser;
-use git_github::llm;
+use git_github::ai;
 
 /// AI commit. By default stages all changes and commits with an AI-generated
 /// message. Usable as `git ac`.
@@ -24,11 +24,11 @@ fn main() {
     let stage = !cli.no_stage && !cli.preview;
 
     let result = if cli.preview {
-        llm::ai_commit(false, false)
+        ai::ai_commit(false, false)
     } else if cli.edit {
-        llm::ai_commit_with_editor(stage)
+        ai::ai_commit_with_editor(stage)
     } else {
-        llm::ai_commit(stage, true)
+        ai::ai_commit(stage, true)
     };
 
     if let Err(e) = result {

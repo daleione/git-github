@@ -1,4 +1,5 @@
-use crate::git;
+use crate::remote::Remote;
+use crate::repo::Repo;
 use std::env;
 
 pub enum OpenTarget {
@@ -7,9 +8,9 @@ pub enum OpenTarget {
     Branch(String),
 }
 
-fn get_remote(remote_name: &str) -> Result<crate::url::Remote, String> {
+fn get_remote(remote_name: &str) -> Result<Remote, String> {
     let path = env::current_dir().map_err(|_| "Failed to get current directory")?;
-    let repo = git::Repo::new(&path);
+    let repo = Repo::new(&path);
     repo.remote(remote_name)
         .map_err(|_| format!("Error: Remote '{}' not found", remote_name))
 }
@@ -19,7 +20,7 @@ pub fn open(remote_name: &str, target: OpenTarget) {
         eprintln!("Failed to get current directory");
         Default::default()
     });
-    let repo = git::Repo::new(&path);
+    let repo = Repo::new(&path);
 
     if let OpenTarget::Branch(branch_name) = &target {
         if !repo.exist(remote_name, branch_name) {

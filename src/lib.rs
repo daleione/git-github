@@ -1,6 +1,6 @@
+pub mod ai;
 mod config;
-pub mod focus;
-mod git;
-pub mod llm;
+pub mod issue;
 pub mod open;
-mod url;
+mod remote;
+mod repo;
