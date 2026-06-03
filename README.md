@@ -77,12 +77,14 @@ git issues              # list the current repo's issues
 ## Configuration
 
 On first run a config file is created at
-`~/.config/git-github/config.toml` (a `config.toml` in the current directory
-takes precedence). Set your DeepSeek API key there:
+`~/.config/git-github/config.toml` (a `git-github.toml` in the current
+directory takes precedence, for per-project overrides). Set your DeepSeek API
+key there:
 
 ```toml
 [deepseek]
 api_key = "sk-..."
+model = "deepseek-chat"   # any DeepSeek chat model
 temperature = 0.7
 # Optional: override the default system prompt
 prompt = ""

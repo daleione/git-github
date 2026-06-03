@@ -18,6 +18,17 @@
 - `open -b`/`-c` were ignored and always opened the current branch; explicit
   targets are now honored
 - Staged diff sent to the AI no longer repeats the full diff once per file
+- `open -r <unknown>` and running outside a repo now print a clear error
+  instead of panicking
+- The auto-generated config file is now valid TOML (the old `prompt` default
+  was malformed and broke first run)
+
+## Other
+
+- AI commit now skips binary, lock/generated, and oversized files when building
+  the prompt (they are still committed)
+- Configurable model via `[deepseek] model`; project-local config renamed to
+  `git-github.toml`; cross-platform home-directory lookup
 
 # v0.1.5 2025-12-04
 
