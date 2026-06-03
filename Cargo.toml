@@ -1,10 +1,12 @@
 [package]
 name = "git-github"
-version = "0.1.5"
+version = "0.1.6"
 edition = "2021"
 authors = ["dalei <guoyunlei@live.com>"]
 description = "git command line plugin of github"
 license = "MIT"
+# Declare every binary explicitly below instead of auto-discovering them.
+autobins = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -23,6 +25,15 @@ serde_json = "1.0.140"
 tokio = { version = "1", features = ["full"] }
 url = "2.4.0"
 
-#[[bin]]
-#name = "git-open"
-#path = "src/main.rs"
+# Short native subcommands, usable as `git open`, `git ac`, `git issues`.
+[[bin]]
+name = "git-open"
+path = "src/bin/git-open.rs"
+
+[[bin]]
+name = "git-ac"
+path = "src/bin/git-ac.rs"
+
+[[bin]]
+name = "git-issues"
+path = "src/bin/git-issues.rs"

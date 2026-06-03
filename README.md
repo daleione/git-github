@@ -1,95 +1,97 @@
 # Git-GitHub CLI Tool
 
-A command-line tool for interacting with Git repositories, featuring quick access to repo pages, issue management, and AI-powered commits.
+A command-line tool for interacting with Git/GitHub repositories: quickly open
+repo pages, list issues, and create AI-powered commits.
 
 ## Features
 
-- **Open repo pages** directly from your terminal
-  - Repository homepage
-  - Specific branches
-  - Specific commits
-- **Issue management**
-  - Focus on specific issues
-  - List all repository issues
+- **Open repo pages** directly from your terminal (homepage, branch, or commit)
+- **Issue listing** for the current repository
 - **AI-powered commits** with automatically generated messages
 
 ## Installation
 
 ```bash
-cargo install git-github
+cargo install git-github          # from crates.io
+# or, from a local checkout:
+cargo install --path .
 ```
 
-## Usage
+This installs several binaries into `~/.cargo/bin`. As long as that directory is
+on your `PATH`, Git will pick them up as native subcommands.
+
+## Commands
+
+Each command is a native Git subcommand.
+
+| Command      | Description                          |
+| ------------ | ------------------------------------ |
+| `git open`   | Open the repo page in your browser   |
+| `git ac`     | Stage all changes and AI-commit      |
+| `git issues` | List repository issues               |
+
+> `git <cmd> --help` is intercepted by Git to look for a man page. Use the short
+> flag `git <cmd> -h` (or call the binary directly, e.g. `git-ac --help`) to see
+> the tool's own help.
+
+### `git open`
+
+Open the repository on GitHub.
 
 ```bash
-git-github [OPTIONS] <COMMAND>
-```
-
-### Options
-
-- `-d`, `--debug`: Turn debugging information on (can be used multiple times to increase verbosity)
-
-### Commands
-
-#### Open
-
-Open the repo website in your browser:
-
-```bash
-git-github open [OPTIONS]
-```
-
-Options:
-- `-c`, `--commit <COMMIT>`: Open a specific commit (conflicts with branch)
-- `-b`, `--branch <BRANCH>`: Open a specific branch
-- `-r`, `--remote <REMOTE>`: Specify remote name (default: "origin")
-
-Examples:
-```bash
-git-github open                     # Opens the repo homepage
-git-github open -b main             # Opens the main branch
-git-github open -c abc123           # Opens commit abc123
-git-github open -r upstream -b dev  # Opens dev branch on upstream remote
-```
-
-#### Issue
-
-Manage GitHub issues:
-
-```bash
-git-github issue <COMMAND>
-```
-
-Subcommands:
-- `focus`: Focus on a specific issue
-  ```bash
-  git-github issue focus -i <ISSUE_ID>
-  ```
-- `list`: List all issues
-  ```bash
-  git-github issue list
-  ```
-
-#### Commit
-
-Create an AI-generated commit:
-
-```bash
-git-github commit [OPTIONS]
+git open                 # current branch (or repo homepage when detached)
+git open -b dev          # the dev branch
+git open -c abc123       # commit abc123
+git open -r upstream     # use the 'upstream' remote (default: origin)
 ```
 
 Options:
-- `-a`, `--apply`: Apply the AI-generated message to the new commit (default: false)
 
-Examples:
+- `-c`, `--commit <COMMIT>`: open a specific commit (conflicts with `--branch`)
+- `-b`, `--branch <BRANCH>`: open a specific branch
+- `-r`, `--remote <REMOTE>`: remote name (default: `origin`)
+
+### `git ac` — AI commit
+
+Generates a commit message from your changes using the DeepSeek API.
+
 ```bash
-git-github commit       # Shows AI-generated message without committing
-git-github commit -a    # Creates commit with AI-generated message
+git ac          # stage all changes, generate a message, and commit
+git ac -e       # stage all, generate, then open the editor to review
+git ac -p       # preview the message only (no staging, no commit)
+git ac -n       # commit only what is already staged (skip auto-staging)
+```
+
+Options:
+
+- `-e`, `--edit`: open the editor to review/edit before committing
+- `-p`, `--preview`: only preview the message; do not stage or commit
+- `-n`, `--no-stage`: do not stage; commit only what is already staged
+
+### `git issues`
+
+```bash
+git issues              # list the current repo's issues
+```
+
+## Configuration
+
+On first run a config file is created at
+`~/.config/git-github/config.toml` (a `config.toml` in the current directory
+takes precedence). Set your DeepSeek API key there:
+
+```toml
+[deepseek]
+api_key = "sk-..."
+temperature = 0.7
+# Optional: override the default system prompt
+prompt = ""
 ```
 
 ## Contributing
 
-Pull requests are welcome! For major changes, please open an issue first to discuss what you'd like to change.
+Pull requests are welcome! For major changes, please open an issue first to
+discuss what you'd like to change.
 
 ## License
 

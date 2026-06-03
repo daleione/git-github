@@ -1,3 +1,24 @@
+# v0.1.6 2026-06-03
+
+## Feature
+
+- Ship native Git subcommands: `git open`, `git ac` (AI commit), `git issues`
+- `git ac` stages all changes by default; `-e` opens the editor, `-p` previews
+  only, `-n` commits only what is already staged
+
+## Change
+
+- Remove the `git-github` umbrella binary; each command is now its own native
+  subcommand
+- AI commit: bare run previews only, default stages all and commits, `-e` opens
+  the editor (replaces the old `-a`/`-m` semantics)
+
+## Fix
+
+- `open -b`/`-c` were ignored and always opened the current branch; explicit
+  targets are now honored
+- Staged diff sent to the AI no longer repeats the full diff once per file
+
 # v0.1.5 2025-12-04
 
 ## Fix
