@@ -1,6 +1,6 @@
-use std::error::Error;
 use std::path::Path;
 
+use crate::error::{Error, Result};
 use crate::remote::Remote;
 use git2::{Delta, DiffDelta, IndexAddOption, Patch, Repository};
 
@@ -50,7 +50,7 @@ pub struct Repo {
 
 impl Repo {
     /// Open the repository at `path`, walking up to parent directories.
-    pub fn new(path: &Path) -> Result<Self, Box<dyn Error>> {
+    pub fn new(path: &Path) -> Result<Self> {
         let mut cwd = path.to_path_buf();
 
         let repository = loop {
@@ -58,11 +58,7 @@ impl Repo {
                 Ok(r) => break r,
                 Err(_) => {
                     if !cwd.pop() {
-                        return Err(format!(
-                            "not a git repository (or any parent): {}",
-                            path.display()
-                        )
-                        .into());
+                        return Err(Error::NotARepo(path.to_path_buf()));
                     }
                 }
             }
@@ -71,14 +67,13 @@ impl Repo {
         Ok(Self { repository })
     }
 
-    pub fn remote(&self, name: &str) -> Result<Remote, Box<dyn Error>> {
+    pub fn remote(&self, name: &str) -> Result<Remote> {
         let repo_remote = self
             .repository
             .find_remote(name)
-            .map_err(|_| format!("remote '{}' not found", name))?;
-        let remote_url = repo_remote.url().ok_or("remote URL is not valid UTF-8")?;
-        Remote::parse(remote_url)
-            .ok_or_else(|| format!("could not parse remote URL: {}", remote_url).into())
+            .map_err(|_| Error::RemoteNotFound(name.to_string()))?;
+        let remote_url = repo_remote.url().ok_or(Error::RemoteUrlNotUtf8)?;
+        Remote::parse(remote_url).ok_or_else(|| Error::RemoteUrlParse(remote_url.to_string()))
     }
 
     pub fn exist(&self, remote: &str, branch: &str) -> bool {
@@ -86,18 +81,18 @@ impl Repo {
         self.repository.find_reference(&reference_name).is_ok()
     }
 
-    pub fn current_branch(&self) -> Result<String, Box<dyn Error>> {
+    pub fn current_branch(&self) -> Result<String> {
         let head = self.repository.head()?;
         if let Some(name) = head.shorthand() {
             Ok(name.to_string())
         } else {
-            Err("could not determine the current branch".into())
+            Err(Error::NoCurrentBranch)
         }
     }
 
     /// Stage every change in the working tree (equivalent to `git add -A`):
     /// new and modified files via `add_all`, deletions via `update_all`.
-    pub fn stage_all(&self) -> Result<(), Box<dyn Error>> {
+    pub fn stage_all(&self) -> Result<()> {
         let mut index = self.repository.index()?;
         index.add_all(["*"].iter(), IndexAddOption::DEFAULT, None)?;
         index.update_all(["*"].iter(), None)?;
@@ -105,7 +100,7 @@ impl Repo {
         Ok(())
     }
 
-    pub fn get_staged_git_changes(&self) -> Result<String, Box<dyn Error>> {
+    pub fn get_staged_git_changes(&self) -> Result<String> {
         let head_tree = self
             .repository
             .head()
@@ -182,13 +177,13 @@ impl Repo {
         }
 
         if changes.trim().is_empty() {
-            return Err("no staged changes found".into());
+            return Err(Error::NoStagedChanges);
         }
 
         Ok(changes)
     }
 
-    pub fn commit(&self, message: &str) -> Result<String, Box<dyn Error>> {
+    pub fn commit(&self, message: &str) -> Result<String> {
         let mut index = self.repository.index()?;
         let tree_id = index.write_tree()?;
         let tree = self.repository.find_tree(tree_id)?;

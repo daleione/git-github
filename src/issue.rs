@@ -1,9 +1,9 @@
+use crate::error::{Error, Result};
 use crate::repo::Repo;
 use std::env;
-use std::error::Error;
 
-pub fn list_issues(remote_name: &str) -> Result<(), Box<dyn Error>> {
-    let path = env::current_dir().map_err(|_| "failed to get the current directory")?;
+pub fn list_issues(remote_name: &str) -> Result<()> {
+    let path = env::current_dir().map_err(|_| Error::NoCurrentDir)?;
     let repo = Repo::new(&path)?;
     let remote = repo.remote(remote_name)?;
 

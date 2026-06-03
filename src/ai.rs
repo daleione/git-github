@@ -1,10 +1,10 @@
 use crate::config::AppConfig;
+use crate::error::{Error, Result};
 use crate::repo::Repo;
 use futures::StreamExt;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::env;
-use std::error::Error;
 use std::fs;
 use std::process::Command;
 
@@ -30,8 +30,8 @@ fn print_banner(title: &str) {
 
 /// Open the repo, optionally stage all changes, then load+validate config and
 /// collect the staged diff. Shared setup for every commit entry point.
-fn prepare(stage: bool) -> Result<(Repo, String, AppConfig), Box<dyn Error>> {
-    let path = env::current_dir().map_err(|_| "failed to get the current directory")?;
+fn prepare(stage: bool) -> Result<(Repo, String, AppConfig)> {
+    let path = env::current_dir().map_err(|_| Error::NoCurrentDir)?;
     let repo = Repo::new(&path)?;
 
     if stage {
@@ -41,9 +41,7 @@ fn prepare(stage: bool) -> Result<(Repo, String, AppConfig), Box<dyn Error>> {
     let changes = repo.get_staged_git_changes()?;
     let config = crate::config::load_config()?;
     if config.deepseek.api_key.is_empty() {
-        return Err(
-            "no DeepSeek API key found; set `api_key` in ~/.config/git-github/config.toml".into(),
-        );
+        return Err(Error::NoApiKey);
     }
 
     Ok((repo, changes, config))
@@ -66,7 +64,7 @@ fn stream_and_collect(
     model: &str,
     messages: Vec<ChatMessage>,
     temperature: Option<f32>,
-) -> Result<String, Box<dyn Error>> {
+) -> Result<String> {
     let rt = tokio::runtime::Runtime::new()?;
     let mut full_message = String::new();
     let mut current_line = String::new();
@@ -94,7 +92,7 @@ fn stream_and_collect(
 }
 
 /// Generate a commit message from the staged changes and act on it per `mode`.
-pub fn run(stage: bool, mode: CommitMode) -> Result<(), Box<dyn Error>> {
+pub fn run(stage: bool, mode: CommitMode) -> Result<()> {
     let (repo, changes, config) = prepare(stage)?;
     let messages = build_prompt_messages(&changes, config.deepseek.prompt);
 
@@ -125,7 +123,7 @@ pub fn run(stage: bool, mode: CommitMode) -> Result<(), Box<dyn Error>> {
 }
 
 /// Pre-fill the editor with `message` via `git commit --template`, then commit.
-fn commit_via_editor(message: &str) -> Result<(), Box<dyn Error>> {
+fn commit_via_editor(message: &str) -> Result<()> {
     // Process-unique name so concurrent runs don't clobber each other.
     let temp_file = env::temp_dir().join(format!("git-github-commit-{}.txt", std::process::id()));
     fs::write(&temp_file, message.trim())?;
@@ -145,7 +143,7 @@ fn commit_via_editor(message: &str) -> Result<(), Box<dyn Error>> {
     let _ = fs::remove_file(&temp_file);
 
     if !status?.success() {
-        return Err("git commit was cancelled or failed".into());
+        return Err(Error::CommitCancelled);
     }
 
     print_banner("✅ Commit Completed");
@@ -223,7 +221,7 @@ async fn stream_commit_message(
     messages: Vec<ChatMessage>,
     temperature: Option<f32>,
     mut callback: impl FnMut(String),
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     let client = Client::new();
     let request_body = ChatRequest {
         model: model.to_string(),
@@ -242,7 +240,7 @@ async fn stream_commit_message(
 
     if !response.status().is_success() {
         let err_msg = response.text().await?;
-        return Err(format!("DeepSeek API error: {}", err_msg).into());
+        return Err(Error::ApiError(err_msg));
     }
 
     let mut stream = response.bytes_stream();

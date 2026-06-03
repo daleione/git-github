@@ -1,6 +1,6 @@
+use crate::error::{Error, Result};
 use crate::repo::Repo;
 use std::env;
-use std::error::Error;
 
 pub enum OpenTarget {
     Remote,
@@ -8,8 +8,8 @@ pub enum OpenTarget {
     Branch(String),
 }
 
-pub fn open(remote_name: &str, target: OpenTarget) -> Result<(), Box<dyn Error>> {
-    let path = env::current_dir().map_err(|_| "failed to get the current directory")?;
+pub fn open(remote_name: &str, target: OpenTarget) -> Result<()> {
+    let path = env::current_dir().map_err(|_| Error::NoCurrentDir)?;
     let repo = Repo::new(&path)?;
     let remote = repo.remote(remote_name)?;
 
@@ -19,11 +19,10 @@ pub fn open(remote_name: &str, target: OpenTarget) -> Result<(), Box<dyn Error>>
     let target = match target {
         OpenTarget::Branch(branch_name) => {
             if !repo.exist(remote_name, &branch_name) {
-                return Err(format!(
-                    "branch '{}' not found in remote '{}'",
-                    branch_name, remote_name
-                )
-                .into());
+                return Err(Error::BranchNotFound {
+                    branch: branch_name,
+                    remote: remote_name.to_string(),
+                });
             }
             OpenTarget::Branch(branch_name)
         }
