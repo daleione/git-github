@@ -59,7 +59,7 @@ impl Repo {
                 Err(_) => {
                     if !cwd.pop() {
                         return Err(format!(
-                            "Not a git repository (or any parent): {}",
+                            "not a git repository (or any parent): {}",
                             path.display()
                         )
                         .into());
@@ -75,10 +75,10 @@ impl Repo {
         let repo_remote = self
             .repository
             .find_remote(name)
-            .map_err(|_| format!("Remote '{}' not found", name))?;
-        let remote_url = repo_remote.url().ok_or("Remote URL is not valid UTF-8")?;
+            .map_err(|_| format!("remote '{}' not found", name))?;
+        let remote_url = repo_remote.url().ok_or("remote URL is not valid UTF-8")?;
         Remote::parse(remote_url)
-            .ok_or_else(|| format!("Could not parse remote URL: {}", remote_url).into())
+            .ok_or_else(|| format!("could not parse remote URL: {}", remote_url).into())
     }
 
     pub fn exist(&self, remote: &str, branch: &str) -> bool {
@@ -91,7 +91,7 @@ impl Repo {
         if let Some(name) = head.shorthand() {
             Ok(name.to_string())
         } else {
-            Err("Could not get current branch name".into())
+            Err("could not determine the current branch".into())
         }
     }
 
@@ -182,7 +182,7 @@ impl Repo {
         }
 
         if changes.trim().is_empty() {
-            return Err("No staged changes found.".into());
+            return Err("no staged changes found".into());
         }
 
         Ok(changes)

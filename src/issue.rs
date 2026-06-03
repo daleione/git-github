@@ -3,7 +3,7 @@ use std::env;
 use std::error::Error;
 
 pub fn list_issues(remote_name: &str) -> Result<(), Box<dyn Error>> {
-    let path = env::current_dir().map_err(|_| "Failed to get current directory")?;
+    let path = env::current_dir().map_err(|_| "failed to get the current directory")?;
     let repo = Repo::new(&path)?;
     let remote = repo.remote(remote_name)?;
 

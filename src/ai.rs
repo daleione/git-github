@@ -31,7 +31,7 @@ fn print_banner(title: &str) {
 /// Open the repo, optionally stage all changes, then load+validate config and
 /// collect the staged diff. Shared setup for every commit entry point.
 fn prepare(stage: bool) -> Result<(Repo, String, AppConfig), Box<dyn Error>> {
-    let path = env::current_dir().map_err(|_| "Failed to get current directory")?;
+    let path = env::current_dir().map_err(|_| "failed to get the current directory")?;
     let repo = Repo::new(&path)?;
 
     if stage {
@@ -42,7 +42,7 @@ fn prepare(stage: bool) -> Result<(Repo, String, AppConfig), Box<dyn Error>> {
     let config = crate::config::load_config()?;
     if config.deepseek.api_key.is_empty() {
         return Err(
-            "Error: No DeepSeek API key found. Please set your API key in the config file.".into(),
+            "no DeepSeek API key found; set `api_key` in ~/.config/git-github/config.toml".into(),
         );
     }
 
@@ -145,7 +145,7 @@ fn commit_via_editor(message: &str) -> Result<(), Box<dyn Error>> {
     let _ = fs::remove_file(&temp_file);
 
     if !status?.success() {
-        return Err("Git commit was cancelled or failed".into());
+        return Err("git commit was cancelled or failed".into());
     }
 
     print_banner("✅ Commit Completed");
@@ -242,7 +242,7 @@ async fn stream_commit_message(
 
     if !response.status().is_success() {
         let err_msg = response.text().await?;
-        return Err(format!("API failed: {}", err_msg).into());
+        return Err(format!("DeepSeek API error: {}", err_msg).into());
     }
 
     let mut stream = response.bytes_stream();

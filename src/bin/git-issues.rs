@@ -1,9 +1,7 @@
-use git_github::issue;
+use git_github::{issue, report};
+use std::process::ExitCode;
 
 /// List the repository's GitHub issues. Usable as `git issues`.
-fn main() {
-    if let Err(e) = issue::list_issues("origin") {
-        eprintln!("{}", e);
-        std::process::exit(1);
-    }
+fn main() -> ExitCode {
+    report(issue::list_issues("origin"))
 }

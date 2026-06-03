@@ -1,5 +1,7 @@
 use clap::Parser;
 use git_github::ai::{self, CommitMode};
+use git_github::report;
+use std::process::ExitCode;
 
 /// AI commit. By default stages all changes and commits with an AI-generated
 /// message. Usable as `git ac`.
@@ -19,7 +21,7 @@ struct Cli {
     no_stage: bool,
 }
 
-fn main() {
+fn main() -> ExitCode {
     let cli = Cli::parse();
     let stage = !cli.no_stage && !cli.preview;
 
@@ -31,8 +33,5 @@ fn main() {
         CommitMode::Apply
     };
 
-    if let Err(e) = ai::run(stage, mode) {
-        eprintln!("{}", e);
-        std::process::exit(1);
-    }
+    report(ai::run(stage, mode))
 }

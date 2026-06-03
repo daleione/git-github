@@ -48,7 +48,7 @@ pub fn load_config() -> Result<AppConfig, Box<dyn std::error::Error>> {
     // Project-local override; named specifically to avoid clashing with an
     // unrelated `config.toml` in the working directory.
     let local_config = Path::new("git-github.toml").to_path_buf();
-    let home = home_dir().ok_or("Could not determine home directory")?;
+    let home = home_dir().ok_or("could not determine the home directory")?;
     let home_config = home
         .join(".config")
         .join("git-github")

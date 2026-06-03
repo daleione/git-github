@@ -8,14 +8,8 @@ pub enum OpenTarget {
     Branch(String),
 }
 
-pub fn open(remote_name: &str, target: OpenTarget) {
-    if let Err(e) = run(remote_name, target) {
-        eprintln!("{}", e);
-    }
-}
-
-fn run(remote_name: &str, target: OpenTarget) -> Result<(), Box<dyn Error>> {
-    let path = env::current_dir().map_err(|_| "Failed to get current directory")?;
+pub fn open(remote_name: &str, target: OpenTarget) -> Result<(), Box<dyn Error>> {
+    let path = env::current_dir().map_err(|_| "failed to get the current directory")?;
     let repo = Repo::new(&path)?;
     let remote = repo.remote(remote_name)?;
 
@@ -26,7 +20,7 @@ fn run(remote_name: &str, target: OpenTarget) -> Result<(), Box<dyn Error>> {
         OpenTarget::Branch(branch_name) => {
             if !repo.exist(remote_name, &branch_name) {
                 return Err(format!(
-                    "Branch '{}' not found in remote '{}'",
+                    "branch '{}' not found in remote '{}'",
                     branch_name, remote_name
                 )
                 .into());

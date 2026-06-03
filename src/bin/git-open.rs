@@ -1,5 +1,7 @@
 use clap::Parser;
 use git_github::open::{self, OpenTarget};
+use git_github::report;
+use std::process::ExitCode;
 
 /// Open the GitHub repo page in your browser. Usable as `git open`.
 #[derive(Parser, Debug)]
@@ -18,7 +20,7 @@ struct Cli {
     remote: String,
 }
 
-fn main() {
+fn main() -> ExitCode {
     let cli = Cli::parse();
 
     let target = if let Some(commit) = cli.commit {
@@ -29,5 +31,5 @@ fn main() {
         OpenTarget::Remote
     };
 
-    open::open(&cli.remote, target);
+    report(open::open(&cli.remote, target))
 }
