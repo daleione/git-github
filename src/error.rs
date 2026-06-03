@@ -28,7 +28,6 @@ pub enum Error {
     GitHub(octocrab::Error),
 }
 
-/// Crate-wide result with our concrete error type.
 pub type Result<T> = std::result::Result<T, Error>;
 
 impl fmt::Display for Error {

@@ -117,9 +117,9 @@ impl Repo {
         let mut capped = false;
 
         for (idx, delta) in diff.deltas().enumerate() {
-            // The header is always kept so the AI knows the file changed, even
-            // when its diff body is omitted below. Everything is still
-            // committed; this only trims what we send to the model.
+            // The header is kept even when the diff body is omitted below, so
+            // the AI still sees that the file changed. Everything is committed
+            // regardless; this only trims what we send to the model.
             let Some(header) = status_header(&delta) else {
                 continue;
             };
@@ -145,7 +145,6 @@ impl Repo {
                 continue;
             }
 
-            // Print only this file's patch, not the whole diff.
             if let Ok(Some(mut patch)) = Patch::from_diff(&diff, idx) {
                 let buf = patch.to_buf()?;
 

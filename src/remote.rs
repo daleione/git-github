@@ -20,12 +20,10 @@ fn host_parser(input: &str) -> IResult<&str, &str> {
     )(input)
 }
 
-/// user_parser return user name
 fn user_parser(input: &str) -> IResult<&str, &str> {
     terminated(take_until("/"), take_while(|c| c == ':' || c == '/'))(input)
 }
 
-/// repo_parser return repo name
 fn repo_parser(input: &str) -> IResult<&str, &str> {
     alt((terminated(take_until(".git"), peek(tag(".git"))), rest))(input)
 }
@@ -37,10 +35,8 @@ pub enum Platform {
     Other(String),
 }
 
-/// Contains the address of the git repository.
-/// git remote url can be two format:
-/// * git@xxx.com:user/repo.git
-//  * https://xxx.com/user/repo.git
+/// A parsed git remote URL, in either `git@host:user/repo.git` or
+/// `https://host/user/repo.git` form.
 #[derive(Debug, Default)]
 pub struct Remote {
     #[allow(dead_code)]

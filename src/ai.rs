@@ -28,8 +28,8 @@ fn print_banner(title: &str) {
     println!("{}", banner_line);
 }
 
-/// Open the repo, optionally stage all changes, then load+validate config and
-/// collect the staged diff. Shared setup for every commit entry point.
+/// Shared setup for every commit entry point: open the repo, optionally stage,
+/// and load a config with a usable API key.
 fn prepare(stage: bool) -> Result<(Repo, String, AppConfig)> {
     let path = env::current_dir().map_err(|_| Error::NoCurrentDir)?;
     let repo = Repo::new(&path)?;
@@ -49,11 +49,8 @@ fn prepare(stage: bool) -> Result<(Repo, String, AppConfig)> {
 
 /// What to do with the AI-generated message once it has been produced.
 pub enum CommitMode {
-    /// Print the message only; do not stage or commit.
     Preview,
-    /// Commit directly with the generated message.
     Apply,
-    /// Open the editor pre-filled with the message, then commit.
     Editor,
 }
 

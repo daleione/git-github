@@ -10,9 +10,8 @@ mod repo;
 
 pub use error::{Error, Result};
 
-/// Print an error in the conventional `error: …` form (as cargo and ripgrep do)
-/// and turn it into a process failure code. Binaries route their top-level
-/// result through this so every command reports failures the same way.
+/// Print an error as `error: …` (cargo/ripgrep style) and map it to a failure
+/// exit code. Every binary funnels its top-level result through this.
 pub fn report(result: Result<()>) -> ExitCode {
     match result {
         Ok(()) => ExitCode::SUCCESS,
