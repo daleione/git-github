@@ -13,6 +13,7 @@ pub struct AppConfig {
 #[derive(Debug, Deserialize)]
 pub struct DeepSeekConfig {
     pub api_key: String,
+    pub model: Option<String>,
     pub temperature: Option<f32>,
     pub prompt: Option<String>,
 }
@@ -27,28 +28,38 @@ fn ensure_config_exists(path: &Path) -> std::io::Result<()> {
             file,
             r#"[deepseek]
 api_key = ""
+model = "deepseek-chat"
 temperature = 0.7
-prompt = """"
+prompt = ""
 "#
         )?;
     }
     Ok(())
 }
 
+/// Home directory across platforms (`HOME` on Unix, `USERPROFILE` on Windows).
+fn home_dir() -> Option<PathBuf> {
+    env::var_os("HOME")
+        .or_else(|| env::var_os("USERPROFILE"))
+        .map(PathBuf::from)
+}
+
 pub fn load_config() -> Result<AppConfig, Box<dyn std::error::Error>> {
-    let current_dir_config = Path::new("config.toml").to_path_buf();
-    let home = env::var("HOME").map_err(|_| "HOME environment variable not set")?;
-    let home_config = PathBuf::from(&home)
+    // Project-local override; named specifically to avoid clashing with an
+    // unrelated `config.toml` in the working directory.
+    let local_config = Path::new("git-github.toml").to_path_buf();
+    let home = home_dir().ok_or("Could not determine home directory")?;
+    let home_config = home
         .join(".config")
         .join("git-github")
         .join("config.toml");
 
-    if !current_dir_config.exists() && !home_config.exists() {
+    if !local_config.exists() && !home_config.exists() {
         ensure_config_exists(&home_config)?;
     }
 
     let cfg = Config::builder()
-        .add_source(File::from(current_dir_config).required(false))
+        .add_source(File::from(local_config).required(false))
         .add_source(File::from(home_config).required(false))
         .build()?;
 

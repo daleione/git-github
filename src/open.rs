@@ -1,6 +1,6 @@
-use crate::remote::Remote;
 use crate::repo::Repo;
 use std::env;
+use std::error::Error;
 
 pub enum OpenTarget {
     Remote,
@@ -8,49 +8,44 @@ pub enum OpenTarget {
     Branch(String),
 }
 
-fn get_remote(remote_name: &str) -> Result<Remote, String> {
-    let path = env::current_dir().map_err(|_| "Failed to get current directory")?;
-    let repo = Repo::new(&path);
-    repo.remote(remote_name)
-        .map_err(|_| format!("Error: Remote '{}' not found", remote_name))
+pub fn open(remote_name: &str, target: OpenTarget) {
+    if let Err(e) = run(remote_name, target) {
+        eprintln!("{}", e);
+    }
 }
 
-pub fn open(remote_name: &str, target: OpenTarget) {
-    let path = env::current_dir().unwrap_or_else(|_| {
-        eprintln!("Failed to get current directory");
-        Default::default()
-    });
-    let repo = Repo::new(&path);
+fn run(remote_name: &str, target: OpenTarget) -> Result<(), Box<dyn Error>> {
+    let path = env::current_dir().map_err(|_| "Failed to get current directory")?;
+    let repo = Repo::new(&path)?;
+    let remote = repo.remote(remote_name)?;
 
-    if let OpenTarget::Branch(branch_name) = &target {
-        if !repo.exist(remote_name, branch_name) {
-            eprintln!(
-                "Error: Branch '{}' not found in remote '{}'",
-                branch_name, remote_name
-            );
-            return;
-        }
-    }
-
-    // An explicit -c/-b target is honored as-is. A bare `open` (Remote)
-    // defaults to the current branch when on one, else the repo homepage.
+    // An explicit -b is validated against the remote; an explicit -c is taken
+    // as-is. A bare `open` (Remote) defaults to the current branch when on one,
+    // else the repo homepage.
     let target = match target {
+        OpenTarget::Branch(branch_name) => {
+            if !repo.exist(remote_name, &branch_name) {
+                return Err(format!(
+                    "Branch '{}' not found in remote '{}'",
+                    branch_name, remote_name
+                )
+                .into());
+            }
+            OpenTarget::Branch(branch_name)
+        }
         OpenTarget::Remote => match repo.current_branch() {
             Ok(current_branch) => OpenTarget::Branch(current_branch),
             Err(_) => OpenTarget::Remote,
         },
-        other => other,
+        commit => commit,
     };
 
-    match get_remote(remote_name) {
-        Ok(remote) => {
-            let url = match target {
-                OpenTarget::Remote => remote.get_repo_url(),
-                OpenTarget::Commit(commit_id) => remote.get_commit_url(&commit_id),
-                OpenTarget::Branch(branch_name) => remote.get_branch_url(&branch_name),
-            };
-            open::that(url).unwrap_or_else(|_| eprintln!("Failed to open URL"))
-        }
-        Err(e) => eprintln!("{}", e),
-    }
+    let url = match target {
+        OpenTarget::Remote => remote.get_repo_url(),
+        OpenTarget::Commit(commit_id) => remote.get_commit_url(&commit_id),
+        OpenTarget::Branch(branch_name) => remote.get_branch_url(&branch_name),
+    };
+
+    open::that(url)?;
+    Ok(())
 }

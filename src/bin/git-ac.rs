@@ -1,5 +1,5 @@
 use clap::Parser;
-use git_github::ai;
+use git_github::ai::{self, CommitMode};
 
 /// AI commit. By default stages all changes and commits with an AI-generated
 /// message. Usable as `git ac`.
@@ -23,15 +23,15 @@ fn main() {
     let cli = Cli::parse();
     let stage = !cli.no_stage && !cli.preview;
 
-    let result = if cli.preview {
-        ai::ai_commit(false, false)
+    let mode = if cli.preview {
+        CommitMode::Preview
     } else if cli.edit {
-        ai::ai_commit_with_editor(stage)
+        CommitMode::Editor
     } else {
-        ai::ai_commit(stage, true)
+        CommitMode::Apply
     };
 
-    if let Err(e) = result {
+    if let Err(e) = ai::run(stage, mode) {
         eprintln!("{}", e);
         std::process::exit(1);
     }

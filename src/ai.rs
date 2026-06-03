@@ -32,7 +32,7 @@ fn print_banner(title: &str) {
 /// collect the staged diff. Shared setup for every commit entry point.
 fn prepare(stage: bool) -> Result<(Repo, String, AppConfig), Box<dyn Error>> {
     let path = env::current_dir().map_err(|_| "Failed to get current directory")?;
-    let repo = Repo::new(&path);
+    let repo = Repo::new(&path)?;
 
     if stage {
         repo.stage_all()?;
@@ -49,10 +49,21 @@ fn prepare(stage: bool) -> Result<(Repo, String, AppConfig), Box<dyn Error>> {
     Ok((repo, changes, config))
 }
 
+/// What to do with the AI-generated message once it has been produced.
+pub enum CommitMode {
+    /// Print the message only; do not stage or commit.
+    Preview,
+    /// Commit directly with the generated message.
+    Apply,
+    /// Open the editor pre-filled with the message, then commit.
+    Editor,
+}
+
 /// Stream the AI response, echoing each completed line as `| ...`, and return
 /// the full message.
 fn stream_and_collect(
     api_key: &str,
+    model: &str,
     messages: Vec<ChatMessage>,
     temperature: Option<f32>,
 ) -> Result<String, Box<dyn Error>> {
@@ -61,7 +72,7 @@ fn stream_and_collect(
     let mut current_line = String::new();
 
     rt.block_on(async {
-        stream_commit_message(api_key, messages, temperature, |content| {
+        stream_commit_message(api_key, model, messages, temperature, |content| {
             for ch in content.chars() {
                 current_line.push(ch);
                 if ch == '\n' {
@@ -82,51 +93,58 @@ fn stream_and_collect(
     Ok(full_message)
 }
 
-pub fn ai_commit(stage: bool, apply: bool) -> Result<(), Box<dyn Error>> {
+/// Generate a commit message from the staged changes and act on it per `mode`.
+pub fn run(stage: bool, mode: CommitMode) -> Result<(), Box<dyn Error>> {
     let (repo, changes, config) = prepare(stage)?;
     let messages = build_prompt_messages(&changes, config.deepseek.prompt);
 
-    print_banner("AI Suggested Commit Message");
-    let full_message =
-        stream_and_collect(&config.deepseek.api_key, messages, config.deepseek.temperature)?;
+    print_banner(match mode {
+        CommitMode::Editor => "AI Generating Commit Message",
+        _ => "AI Suggested Commit Message",
+    });
 
-    if apply {
-        let commit_id = repo.commit(full_message.trim())?;
-        print_banner("✅ Commit Successful");
-        println!("Commit ID: {}\n", commit_id);
+    let model = config.deepseek.model.as_deref().unwrap_or("deepseek-chat");
+    let message = stream_and_collect(
+        &config.deepseek.api_key,
+        model,
+        messages,
+        config.deepseek.temperature,
+    )?;
+
+    match mode {
+        CommitMode::Preview => {}
+        CommitMode::Apply => {
+            let commit_id = repo.commit(message.trim())?;
+            print_banner("✅ Commit Successful");
+            println!("Commit ID: {}\n", commit_id);
+        }
+        CommitMode::Editor => commit_via_editor(&message)?,
     }
 
     Ok(())
 }
 
-pub fn ai_commit_with_editor(stage: bool) -> Result<(), Box<dyn Error>> {
-    let (_repo, changes, config) = prepare(stage)?;
-    let messages = build_prompt_messages(&changes, config.deepseek.prompt);
-
-    print_banner("AI Generating Commit Message");
-    let full_message =
-        stream_and_collect(&config.deepseek.api_key, messages, config.deepseek.temperature)?;
-
-    // Create a temporary file with the AI-generated message
-    let temp_file = env::temp_dir().join("git_github_commit_msg.txt");
-    fs::write(&temp_file, full_message.trim())?;
+/// Pre-fill the editor with `message` via `git commit --template`, then commit.
+fn commit_via_editor(message: &str) -> Result<(), Box<dyn Error>> {
+    // Process-unique name so concurrent runs don't clobber each other.
+    let temp_file = env::temp_dir().join(format!("git-github-commit-{}.txt", std::process::id()));
+    fs::write(&temp_file, message.trim())?;
 
     print_banner("Opening Editor for Review");
 
-    // Open git commit with the pre-filled message using -e flag to force editor
-    // and inherit stdio to allow interactive editing
+    // `-e` forces the editor; inherit stdio for interactive editing.
     let status = Command::new("git")
-        .args(&["commit", "-e", "-v", "--template"])
+        .args(["commit", "-e", "-v", "--template"])
         .arg(&temp_file)
         .stdin(std::process::Stdio::inherit())
         .stdout(std::process::Stdio::inherit())
         .stderr(std::process::Stdio::inherit())
-        .status()?;
+        .status();
 
-    // Clean up the temporary file
+    // Clean up regardless of how git exited.
     let _ = fs::remove_file(&temp_file);
 
-    if !status.success() {
+    if !status?.success() {
         return Err("Git commit was cancelled or failed".into());
     }
 
@@ -201,13 +219,14 @@ struct DeltaMessage {
 
 async fn stream_commit_message(
     api_key: &str,
+    model: &str,
     messages: Vec<ChatMessage>,
     temperature: Option<f32>,
     mut callback: impl FnMut(String),
 ) -> Result<(), Box<dyn Error>> {
     let client = Client::new();
     let request_body = ChatRequest {
-        model: "deepseek-chat".to_string(),
+        model: model.to_string(),
         messages,
         stream: true,
         temperature,

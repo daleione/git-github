@@ -1,8 +1,8 @@
 use std::error::Error;
-use std::path::PathBuf;
+use std::path::Path;
 
 use crate::remote::Remote;
-use git2::{Delta, IndexAddOption, Patch, Repository};
+use git2::{Delta, DiffDelta, IndexAddOption, Patch, Repository};
 
 /// Per-file diff size cap sent to the AI. Larger diffs are omitted.
 const MAX_FILE_DIFF_BYTES: usize = 16 * 1024;
@@ -28,35 +28,57 @@ fn is_excluded(path: &str) -> bool {
     SKIP_NAMES.contains(&name) || SKIP_SUFFIXES.iter().any(|s| path.ends_with(s))
 }
 
+/// The header line for a staged file, or `None` for statuses we don't report.
+fn status_header(delta: &DiffDelta) -> Option<String> {
+    let old = delta.old_file().path();
+    let new = delta.new_file().path();
+    match delta.status() {
+        Delta::Added => new.map(|p| format!("Staged (new): {}\n", p.display())),
+        Delta::Modified => new.map(|p| format!("Staged (modified): {}\n", p.display())),
+        Delta::Deleted => old.map(|p| format!("Staged (deleted): {}\n", p.display())),
+        Delta::Renamed => match (old, new) {
+            (Some(o), Some(n)) => Some(format!("Renamed: {} -> {}\n", o.display(), n.display())),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
 pub struct Repo {
     repository: Repository,
 }
 
 impl Repo {
-    pub fn new(path: &PathBuf) -> Self {
-        let mut cwd = path.clone();
+    /// Open the repository at `path`, walking up to parent directories.
+    pub fn new(path: &Path) -> Result<Self, Box<dyn Error>> {
+        let mut cwd = path.to_path_buf();
 
         let repository = loop {
             match Repository::open(&cwd) {
                 Ok(r) => break r,
-                Err(_e) => {
+                Err(_) => {
                     if !cwd.pop() {
-                        panic!("Unable to open repository at path or parent: {:?}", path);
+                        return Err(format!(
+                            "Not a git repository (or any parent): {}",
+                            path.display()
+                        )
+                        .into());
                     }
                 }
             }
         };
 
-        Self { repository }
+        Ok(Self { repository })
     }
 
     pub fn remote(&self, name: &str) -> Result<Remote, Box<dyn Error>> {
-        let repo_remote = self.repository.find_remote(name).unwrap();
-        let remote_url = repo_remote.url().unwrap();
-        if let Some(remote) = Remote::parse(remote_url) {
-            return Ok(remote);
-        }
-        Err("nop".into())
+        let repo_remote = self
+            .repository
+            .find_remote(name)
+            .map_err(|_| format!("Remote '{}' not found", name))?;
+        let remote_url = repo_remote.url().ok_or("Remote URL is not valid UTF-8")?;
+        Remote::parse(remote_url)
+            .ok_or_else(|| format!("Could not parse remote URL: {}", remote_url).into())
     }
 
     pub fn exist(&self, remote: &str, branch: &str) -> bool {
@@ -97,39 +119,24 @@ impl Repo {
 
         let mut changes = String::new();
         let mut total_bytes = 0usize;
+        let mut capped = false;
 
         for (idx, delta) in diff.deltas().enumerate() {
-            let old_path = delta.old_file().path();
-            let new_path = delta.new_file().path();
-            let path = new_path.or(old_path).map(|p| p.display().to_string());
+            // The header is always kept so the AI knows the file changed, even
+            // when its diff body is omitted below. Everything is still
+            // committed; this only trims what we send to the model.
+            let Some(header) = status_header(&delta) else {
+                continue;
+            };
+            changes.push_str(&header);
 
-            // Header line is always kept so the AI knows the file changed,
-            // even when we omit its diff body below.
-            match delta.status() {
-                Delta::Added => match &path {
-                    Some(p) => changes.push_str(&format!("Staged (new): {}\n", p)),
-                    None => continue,
-                },
-                Delta::Modified => match &path {
-                    Some(p) => changes.push_str(&format!("Staged (modified): {}\n", p)),
-                    None => continue,
-                },
-                Delta::Deleted => match old_path {
-                    Some(p) => changes.push_str(&format!("Staged (deleted): {}\n", p.display())),
-                    None => continue,
-                },
-                Delta::Renamed => match (old_path, new_path) {
-                    (Some(o), Some(n)) => changes
-                        .push_str(&format!("Renamed: {} -> {}\n", o.display(), n.display())),
-                    _ => continue,
-                },
-                _ => continue,
-            }
+            let path = delta
+                .new_file()
+                .path()
+                .or_else(|| delta.old_file().path())
+                .map(|p| p.display().to_string())
+                .unwrap_or_default();
 
-            let path = path.unwrap_or_default();
-
-            // Decide whether to include the diff body, and why not if omitted.
-            // Everything is still committed; this only trims the AI prompt.
             if delta.new_file().is_binary() || delta.old_file().is_binary() {
                 changes.push_str("(binary file, diff omitted)\n\n");
                 continue;
@@ -138,13 +145,17 @@ impl Repo {
                 changes.push_str("(generated/lock file, diff omitted)\n\n");
                 continue;
             }
+            if capped {
+                changes.push_str("(diff omitted: total size limit reached)\n\n");
+                continue;
+            }
 
             // Print only this file's patch, not the whole diff.
             if let Ok(Some(mut patch)) = Patch::from_diff(&diff, idx) {
                 let buf = patch.to_buf()?;
 
                 // Guard against binary content libgit2 may emit as raw bytes.
-                if buf.iter().any(|&b| b == 0) {
+                if buf.contains(&0) {
                     changes.push_str("(binary file, diff omitted)\n\n");
                     continue;
                 }
@@ -158,6 +169,7 @@ impl Repo {
                     continue;
                 }
                 if total_bytes + text.len() > MAX_TOTAL_DIFF_BYTES {
+                    capped = true;
                     changes.push_str("(diff omitted: total size limit reached)\n\n");
                     continue;
                 }
@@ -194,7 +206,7 @@ impl Repo {
             &[&parent_commit],
         )?;
 
-        return Ok(commit_id.to_string());
+        Ok(commit_id.to_string())
     }
 }
 
