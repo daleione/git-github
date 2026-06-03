@@ -119,7 +119,7 @@ pub fn run(stage: bool, mode: CommitMode) -> Result<()> {
     Ok(())
 }
 
-/// Pre-fill the editor with `message` via `git commit --template`, then commit.
+/// Pre-fill the editor with `message`, then commit.
 fn commit_via_editor(message: &str) -> Result<()> {
     // Process-unique name so concurrent runs don't clobber each other.
     let temp_file = env::temp_dir().join(format!("git-github-commit-{}.txt", std::process::id()));
@@ -127,9 +127,10 @@ fn commit_via_editor(message: &str) -> Result<()> {
 
     print_banner("Opening Editor for Review");
 
-    // `-e` forces the editor; inherit stdio for interactive editing.
+    // `-F` seeds the message and `-e` opens the editor to edit it. Unlike
+    // `--template`, this does not abort when the message is left unchanged.
     let status = Command::new("git")
-        .args(["commit", "-e", "-v", "--template"])
+        .args(["commit", "-e", "-v", "-F"])
         .arg(&temp_file)
         .stdin(std::process::Stdio::inherit())
         .stdout(std::process::Stdio::inherit())
