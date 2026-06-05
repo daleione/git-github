@@ -28,6 +28,7 @@ Each command is a native Git subcommand.
 | ------------ | ------------------------------------ |
 | `git open`   | Open the repo page in your browser   |
 | `git ac`     | AI-commit the staged changes         |
+| `git pr`     | Open a PR with an AI description      |
 | `git issues` | List repository issues               |
 
 > `git <cmd> --help` is intercepted by Git to look for a man page. Use the short
@@ -69,6 +70,28 @@ Options:
 - `-a`, `--all`: stage all changes before committing (like `git add -A`)
 - `-e`, `--edit`: open the editor to review/edit before committing
 - `-p`, `--preview`: only preview the message; do not stage or commit
+
+### `git pr` — AI pull request
+
+Pushes the current branch and opens a GitHub pull request with a title and
+description generated from the commits and diff against the base branch.
+
+```bash
+git pr               # PR into the repo's default branch
+git pr -b dev        # target the 'dev' branch
+git pr -d            # create as a draft
+git pr -e            # edit the title/body before creating
+```
+
+Options:
+
+- `-b`, `--base <BASE>`: base branch to merge into (default: the repo's default branch)
+- `-d`, `--draft`: create the pull request as a draft
+- `-e`, `--edit`: open the editor to review/edit the title and body first
+- `-r`, `--remote <REMOTE>`: remote name (default: `origin`)
+
+Requires a `GITHUB_TOKEN` (or `GH_TOKEN`) env var, and a DeepSeek API key for the
+description.
 
 ### `git issues`
 

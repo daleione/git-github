@@ -1,3 +1,11 @@
+# Unreleased
+
+## Feature
+
+- `git pr`: push the current branch and open a GitHub pull request with an
+  AI-generated title and description (from the commits/diff vs the base branch);
+  supports `-b/--base`, `-d/--draft`, `-e/--edit`, `-r/--remote`
+
 # v0.1.6 2026-06-03
 
 ## Feature
