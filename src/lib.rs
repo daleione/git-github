@@ -3,8 +3,11 @@ use std::process::ExitCode;
 pub mod ai;
 mod config;
 pub mod error;
+mod github;
 pub mod issue;
+mod llm;
 pub mod open;
+pub mod pr;
 mod remote;
 mod repo;
 

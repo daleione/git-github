@@ -33,5 +33,9 @@ name = "git-ac"
 path = "src/bin/git-ac.rs"
 
 [[bin]]
+name = "git-pr"
+path = "src/bin/git-pr.rs"
+
+[[bin]]
 name = "git-issues"
 path = "src/bin/git-issues.rs"

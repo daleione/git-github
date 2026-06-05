@@ -16,6 +16,10 @@ pub enum Error {
     NoStagedChanges,
     EmptyMessage,
     NoApiKey,
+    NoGitHubToken,
+    NoDefaultBranch,
+    NoCommitsForPr(String),
+    GitCommand(String),
     ApiError(String),
     CommitCancelled,
     NoCurrentDir,
@@ -53,6 +57,17 @@ impl fmt::Display for Error {
                 f,
                 "no DeepSeek API key found; set `api_key` in ~/.config/git-github/config.toml"
             ),
+            Error::NoGitHubToken => write!(
+                f,
+                "creating a pull request requires a GitHub token; set GITHUB_TOKEN (or GH_TOKEN)"
+            ),
+            Error::NoDefaultBranch => {
+                write!(f, "could not determine the repository's default branch")
+            }
+            Error::NoCommitsForPr(base) => {
+                write!(f, "no commits between '{}' and the current branch", base)
+            }
+            Error::GitCommand(msg) => write!(f, "git command failed: {}", msg),
             Error::ApiError(msg) => write!(f, "DeepSeek API error: {}", msg),
             Error::CommitCancelled => write!(f, "git commit was cancelled or failed"),
             Error::NoCurrentDir => write!(f, "failed to get the current directory"),
