@@ -64,5 +64,13 @@ pub fn load_config() -> Result<AppConfig> {
         .add_source(File::from(home_config).required(false))
         .build()?;
 
-    Ok(cfg.try_deserialize()?)
+    let mut app: AppConfig = cfg.try_deserialize()?;
+
+    // An explicit env var wins over the config file, so a key never has to be
+    // written to disk (handy for CI).
+    if let Some(key) = env::var("DEEPSEEK_API_KEY").ok().filter(|k| !k.is_empty()) {
+        app.deepseek.api_key = key;
+    }
+
+    Ok(app)
 }

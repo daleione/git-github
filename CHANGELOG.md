@@ -5,6 +5,13 @@
 - Ship native Git subcommands: `git open`, `git ac` (AI commit), `git issues`
 - `git ac` commits the staged changes (like `git commit`); `-a` stages all
   changes first, `-e` opens the editor, `-p` previews only
+- `git ac` now commits via `git commit`, so pre-commit/commit-msg hooks and
+  commit signing run (libgit2 would have skipped them)
+- `git issues` gains `-s/--state` (open/closed/all) and `-r/--remote`, paginates
+  through all results, and omits pull requests
+- `DEEPSEEK_API_KEY` env var can supply the API key (overrides the config file)
+- `git issues` uses `GITHUB_TOKEN`/`GH_TOKEN` when set, for private repos and a
+  higher rate limit
 
 ## Change
 
@@ -16,6 +23,10 @@
 
 ## Fix
 
+- AI commit no longer silently drops tokens when an SSE line or multibyte
+  character is split across network chunks
+- AI commit aborts with a clear error instead of committing an empty message
+- AI requests now use connect/read timeouts so a stalled connection fails fast
 - `open -b`/`-c` were ignored and always opened the current branch; explicit
   targets are now honored
 - Staged diff sent to the AI no longer repeats the full diff once per file
@@ -23,6 +34,7 @@
   instead of panicking
 - The auto-generated config file is now valid TOML (the old `prompt` default
   was malformed and broke first run)
+- Commit banners are centered by character width, so emoji titles align
 
 ## Other
 
@@ -30,6 +42,8 @@
   the prompt (they are still committed)
 - Configurable model via `[deepseek] model`; project-local config renamed to
   `git-github.toml`; cross-platform home-directory lookup
+- Upgrade dependencies: git2 0.21, octocrab 0.53, reqwest 0.13, nom 8; drop
+  unused `regex` and `url`
 
 # v0.1.5 2025-12-04
 

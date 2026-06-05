@@ -73,8 +73,20 @@ Options:
 ### `git issues`
 
 ```bash
-git issues              # list the current repo's issues
+git issues              # list the current repo's open issues
+git issues -s closed    # closed issues (open | closed | all)
+git issues -s all
+git issues -r upstream  # use the 'upstream' remote (default: origin)
 ```
+
+Options:
+
+- `-s`, `--state <STATE>`: which issues to list — `open` (default), `closed`, `all`
+- `-r`, `--remote <REMOTE>`: remote name (default: `origin`)
+
+Results are paginated through fully, and pull requests are omitted. Set a
+`GITHUB_TOKEN` (or `GH_TOKEN`) env var to access private repos and avoid the
+unauthenticated rate limit.
 
 ## Configuration
 
@@ -91,6 +103,9 @@ temperature = 0.7
 # Optional: override the default system prompt
 prompt = ""
 ```
+
+Alternatively, set the `DEEPSEEK_API_KEY` env var; it overrides the config file,
+so the key never has to be written to disk.
 
 ## Contributing
 

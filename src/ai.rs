@@ -7,23 +7,27 @@ use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
 use std::process::Command;
+use std::time::Duration;
 
 fn print_banner(title: &str) {
     let max_width = 100;
     let min_width = 60;
     let padding = 4;
-    let raw_width = title.len() + padding * 2;
+    // Count characters, not bytes, so multibyte titles (e.g. "✅ …") still
+    // size and center the banner correctly.
+    let title_width = title.chars().count();
+    let raw_width = title_width + padding * 2;
     let total_width = std::cmp::min(max_width, std::cmp::max(min_width, raw_width));
     let banner_line = "=".repeat(total_width);
 
-    let title_padding = (total_width - title.len()) / 2;
+    let title_padding = (total_width - title_width) / 2;
 
     println!("{}", banner_line);
     println!(
         "{}{}{}",
         " ".repeat(title_padding),
         title,
-        " ".repeat(total_width - title_padding - title.len())
+        " ".repeat(total_width - title_padding - title_width)
     );
     println!("{}", banner_line);
 }
@@ -62,7 +66,9 @@ fn stream_and_collect(
     messages: Vec<ChatMessage>,
     temperature: Option<f32>,
 ) -> Result<String> {
-    let rt = tokio::runtime::Runtime::new()?;
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
     let mut full_message = String::new();
     let mut current_line = String::new();
 
@@ -106,31 +112,44 @@ pub fn run(stage: bool, mode: CommitMode) -> Result<()> {
         config.deepseek.temperature,
     )?;
 
+    if !matches!(mode, CommitMode::Preview) && message.trim().is_empty() {
+        return Err(Error::EmptyMessage);
+    }
+
     match mode {
         CommitMode::Preview => {}
         CommitMode::Apply => {
-            let commit_id = repo.commit(message.trim())?;
+            commit_via_git(&message, false)?;
             print_banner("✅ Commit Successful");
-            println!("Commit ID: {}\n", commit_id);
+            println!("Commit ID: {}\n", repo.head_commit_id()?);
         }
-        CommitMode::Editor => commit_via_editor(&message)?,
+        CommitMode::Editor => {
+            commit_via_git(&message, true)?;
+            print_banner("✅ Commit Completed");
+        }
     }
 
     Ok(())
 }
 
-/// Pre-fill the editor with `message`, then commit.
-fn commit_via_editor(message: &str) -> Result<()> {
+/// Commit the staged changes via `git commit -F`, so pre-commit/commit-msg
+/// hooks and signing run (libgit2 would skip them). When `edit` is set, `-e`
+/// opens the editor on the seeded message first.
+fn commit_via_git(message: &str, edit: bool) -> Result<()> {
     // Process-unique name so concurrent runs don't clobber each other.
     let temp_file = env::temp_dir().join(format!("git-github-commit-{}.txt", std::process::id()));
     fs::write(&temp_file, message.trim())?;
 
-    print_banner("Opening Editor for Review");
-
-    // `-F` seeds the message and `-e` opens the editor to edit it. Unlike
-    // `--template`, this does not abort when the message is left unchanged.
-    let status = Command::new("git")
-        .args(["commit", "-e", "-v", "-F"])
+    let mut command = Command::new("git");
+    command.arg("commit");
+    if edit {
+        print_banner("Opening Editor for Review");
+        // `-e` opens the editor to edit the seeded message; `-F` (below) does
+        // not abort when the message is left unchanged, unlike `--template`.
+        command.args(["-e", "-v"]);
+    }
+    let status = command
+        .arg("-F")
         .arg(&temp_file)
         .stdin(std::process::Stdio::inherit())
         .stdout(std::process::Stdio::inherit())
@@ -143,8 +162,6 @@ fn commit_via_editor(message: &str) -> Result<()> {
     if !status?.success() {
         return Err(Error::CommitCancelled);
     }
-
-    print_banner("✅ Commit Completed");
 
     Ok(())
 }
@@ -220,7 +237,13 @@ async fn stream_commit_message(
     temperature: Option<f32>,
     mut callback: impl FnMut(String),
 ) -> Result<()> {
-    let client = Client::new();
+    // `connect_timeout` bounds reaching the API; `read_timeout` is an idle
+    // timeout between stream reads, so a long-but-active stream is not cut off
+    // while a stalled connection still fails fast.
+    let client = Client::builder()
+        .connect_timeout(Duration::from_secs(10))
+        .read_timeout(Duration::from_secs(60))
+        .build()?;
     let request_body = ChatRequest {
         model: model.to_string(),
         messages,
@@ -241,24 +264,89 @@ async fn stream_commit_message(
         return Err(Error::ApiError(err_msg));
     }
 
+    // SSE events are newline-delimited, but `bytes_stream` yields arbitrary
+    // network chunks: a single `data:` line (or a multibyte char) may straddle
+    // two chunks. Buffer bytes and only parse whole lines so nothing is lost.
     let mut stream = response.bytes_stream();
+    let mut buffer: Vec<u8> = Vec::new();
     while let Some(chunk) = stream.next().await {
-        let chunk = chunk?;
-        let chunk_str = String::from_utf8_lossy(&chunk);
+        buffer.extend_from_slice(&chunk?);
+        drain_sse_lines(&mut buffer, &mut callback);
+    }
 
-        for line in chunk_str.lines() {
-            if line.starts_with("data:") && line != "data: [DONE]" {
-                let json_str = &line[5..].trim();
-                if let Ok(data) = serde_json::from_str::<StreamResponseChunk>(json_str) {
-                    for choice in data.choices {
-                        if let Some(content) = choice.delta.content {
-                            callback(content);
-                        }
+    Ok(())
+}
+
+/// Parse every complete (newline-terminated) SSE line in `buffer`, invoking
+/// `callback` for each content delta. Any trailing partial line is left in
+/// `buffer` for the next chunk.
+fn drain_sse_lines(buffer: &mut Vec<u8>, callback: &mut impl FnMut(String)) {
+    while let Some(newline) = buffer.iter().position(|&b| b == b'\n') {
+        let line: Vec<u8> = buffer.drain(..=newline).collect();
+        let line = String::from_utf8_lossy(&line);
+        let line = line.trim();
+
+        if let Some(data) = line.strip_prefix("data:") {
+            let data = data.trim();
+            if data == "[DONE]" {
+                continue;
+            }
+            if let Ok(parsed) = serde_json::from_str::<StreamResponseChunk>(data) {
+                for choice in parsed.choices {
+                    if let Some(content) = choice.delta.content {
+                        callback(content);
                     }
                 }
             }
         }
     }
+}
 
-    Ok(())
+#[cfg(test)]
+mod test {
+    use super::drain_sse_lines;
+
+    /// Feed an SSE stream one byte at a time and confirm every content delta is
+    /// recovered — i.e. lines and multibyte chars split across chunks are not
+    /// lost. Also checks the trailing partial line stays buffered.
+    fn collect_byte_by_byte(stream: &[u8]) -> (String, Vec<u8>) {
+        let mut buffer = Vec::new();
+        let mut out = String::new();
+        let mut push = |c: String| out.push_str(&c);
+        for &byte in stream {
+            buffer.push(byte);
+            drain_sse_lines(&mut buffer, &mut push);
+        }
+        (out, buffer)
+    }
+
+    #[test]
+    fn reassembles_split_lines_and_multibyte() {
+        let stream = concat!(
+            "data: {\"choices\":[{\"delta\":{\"content\":\"Hello \"}}]}\n",
+            "data: {\"choices\":[{\"delta\":{\"content\":\"世界\"}}]}\n",
+            "data: [DONE]\n",
+        )
+        .as_bytes();
+
+        let (out, buffer) = collect_byte_by_byte(stream);
+        assert_eq!(out, "Hello 世界");
+        assert!(buffer.is_empty());
+    }
+
+    #[test]
+    fn keeps_trailing_partial_line_buffered() {
+        let mut buffer = Vec::new();
+        let mut out = String::new();
+        let mut push = |c: String| out.push_str(&c);
+
+        // A complete line plus the start of the next one.
+        buffer.extend_from_slice(
+            b"data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\ndata: {\"choi",
+        );
+        drain_sse_lines(&mut buffer, &mut push);
+
+        assert_eq!(out, "hi");
+        assert_eq!(buffer, b"data: {\"choi");
+    }
 }

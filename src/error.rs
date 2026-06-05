@@ -14,6 +14,7 @@ pub enum Error {
     NoCurrentBranch,
     BranchNotFound { branch: String, remote: String },
     NoStagedChanges,
+    EmptyMessage,
     NoApiKey,
     ApiError(String),
     CommitCancelled,
@@ -47,6 +48,7 @@ impl fmt::Display for Error {
                 f,
                 "no staged changes found; stage files with `git add <path>`, or run `git ac -a` to stage all changes"
             ),
+            Error::EmptyMessage => write!(f, "the AI returned an empty commit message"),
             Error::NoApiKey => write!(
                 f,
                 "no DeepSeek API key found; set `api_key` in ~/.config/git-github/config.toml"

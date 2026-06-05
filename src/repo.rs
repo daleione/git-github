@@ -180,25 +180,10 @@ impl Repo {
         Ok(changes)
     }
 
-    pub fn commit(&self, message: &str) -> Result<String> {
-        let mut index = self.repository.index()?;
-        let tree_id = index.write_tree()?;
-        let tree = self.repository.find_tree(tree_id)?;
-
-        let signature = self.repository.signature()?;
-
-        let parent_commit = self.repository.head()?.peel_to_commit()?;
-
-        let commit_id = self.repository.commit(
-            Some("HEAD"),
-            &signature,
-            &signature,
-            message,
-            &tree,
-            &[&parent_commit],
-        )?;
-
-        Ok(commit_id.to_string())
+    /// The short id of the current `HEAD` commit, for reporting after a commit.
+    pub fn head_commit_id(&self) -> Result<String> {
+        let commit = self.repository.head()?.peel_to_commit()?;
+        Ok(commit.id().to_string())
     }
 }
 
