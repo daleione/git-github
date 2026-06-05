@@ -2,30 +2,32 @@ use nom::{
     branch::alt,
     bytes::complete::{tag, take_till, take_until, take_while},
     combinator::{peek, rest},
-    sequence::{terminated, tuple},
-    IResult,
+    sequence::terminated,
+    IResult, Parser,
 };
 
 fn schema_parser(input: &str) -> IResult<&str, &str> {
     terminated(
         alt((tag("git"), tag("https"), tag("http"))),
         take_while(|c| c == '@' || c == ':' || c == '/'),
-    )(input)
+    )
+    .parse(input)
 }
 
 fn host_parser(input: &str) -> IResult<&str, &str> {
     terminated(
         take_till(|c| c == ':' || c == '/'),
         take_while(|c| c == ':' || c == '/'),
-    )(input)
+    )
+    .parse(input)
 }
 
 fn user_parser(input: &str) -> IResult<&str, &str> {
-    terminated(take_until("/"), take_while(|c| c == ':' || c == '/'))(input)
+    terminated(take_until("/"), take_while(|c| c == ':' || c == '/')).parse(input)
 }
 
 fn repo_parser(input: &str) -> IResult<&str, &str> {
-    alt((terminated(take_until(".git"), peek(tag(".git"))), rest))(input)
+    alt((terminated(take_until(".git"), peek(tag(".git"))), rest)).parse(input)
 }
 
 #[allow(dead_code)]
@@ -49,7 +51,7 @@ pub struct Remote {
 impl Remote {
     pub fn parse(url_str: &str) -> Option<Remote> {
         if let Ok((_, (schema, host, user, repo))) =
-            tuple((schema_parser, host_parser, user_parser, repo_parser))(url_str)
+            (schema_parser, host_parser, user_parser, repo_parser).parse(url_str)
         {
             Some(Remote {
                 schema: schema.to_string(),

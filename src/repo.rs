@@ -72,7 +72,7 @@ impl Repo {
             .repository
             .find_remote(name)
             .map_err(|_| Error::RemoteNotFound(name.to_string()))?;
-        let remote_url = repo_remote.url().ok_or(Error::RemoteUrlNotUtf8)?;
+        let remote_url = repo_remote.url().map_err(|_| Error::RemoteUrlNotUtf8)?;
         Remote::parse(remote_url).ok_or_else(|| Error::RemoteUrlParse(remote_url.to_string()))
     }
 
@@ -83,11 +83,9 @@ impl Repo {
 
     pub fn current_branch(&self) -> Result<String> {
         let head = self.repository.head()?;
-        if let Some(name) = head.shorthand() {
-            Ok(name.to_string())
-        } else {
-            Err(Error::NoCurrentBranch)
-        }
+        head.shorthand()
+            .map(|name| name.to_string())
+            .map_err(|_| Error::NoCurrentBranch)
     }
 
     /// Stage every change in the working tree (equivalent to `git add -A`):
