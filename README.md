@@ -44,10 +44,14 @@ git open                 # current branch (or repo homepage when detached)
 git open -b dev          # the dev branch
 git open -c abc123       # commit abc123
 git open -r upstream     # use the 'upstream' remote (default: origin)
+git open src/main.rs     # the file on the current branch
+git open src/main.rs:42  # the file, anchored to line 42
+git open src/main.rs:40-50  # a line range
 ```
 
 Options:
 
+- `<PATH[:LINE]>`: open a file, optionally anchored to a line or `start-end` range
 - `-c`, `--commit <COMMIT>`: open a specific commit (conflicts with `--branch`)
 - `-b`, `--branch <BRANCH>`: open a specific branch
 - `-r`, `--remote <REMOTE>`: remote name (default: `origin`)

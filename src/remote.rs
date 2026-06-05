@@ -103,6 +103,19 @@ impl Remote {
     pub fn get_branch_url(&self, branch: &str) -> String {
         format!("{}/tree/{}", self.get_repo_url(), branch)
     }
+
+    /// URL to a file at `reference` (a branch or commit), optionally anchored to
+    /// a single line or a `start`-`end` range.
+    pub fn get_file_url(&self, reference: &str, path: &str, line: Option<(u32, Option<u32>)>) -> String {
+        let mut url = format!("{}/blob/{}/{}", self.get_repo_url(), reference, path);
+        if let Some((start, end)) = line {
+            url.push_str(&format!("#L{}", start));
+            if let Some(end) = end {
+                url.push_str(&format!("-L{}", end));
+            }
+        }
+        url
+    }
 }
 
 #[cfg(test)]

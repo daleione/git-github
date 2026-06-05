@@ -185,6 +185,31 @@ impl Repo {
         let commit = self.repository.head()?.peel_to_commit()?;
         Ok(commit.id().to_string())
     }
+
+    /// Convert `input` (absolute, or relative to the current directory) into a
+    /// path relative to the repository root, with `/` separators for URLs.
+    pub fn workdir_relative(&self, input: &Path) -> Result<String> {
+        let workdir = self
+            .repository
+            .workdir()
+            .ok_or_else(|| Error::PathOutsideRepo(input.to_path_buf()))?;
+        let cwd = std::env::current_dir().map_err(|_| Error::NoCurrentDir)?;
+        let absolute = if input.is_absolute() {
+            input.to_path_buf()
+        } else {
+            cwd.join(input)
+        };
+
+        // Canonicalize so `..` and symlinks resolve; fall back to the raw paths
+        // when the target does not exist on disk.
+        let absolute = absolute.canonicalize().unwrap_or(absolute);
+        let workdir = workdir.canonicalize().unwrap_or_else(|_| workdir.to_path_buf());
+
+        let relative = absolute
+            .strip_prefix(&workdir)
+            .map_err(|_| Error::PathOutsideRepo(input.to_path_buf()))?;
+        Ok(relative.to_string_lossy().replace('\\', "/"))
+    }
 }
 
 #[cfg(test)]

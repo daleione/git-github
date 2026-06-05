@@ -13,6 +13,7 @@ pub enum Error {
     RemoteUrlParse(String),
     NoCurrentBranch,
     BranchNotFound { branch: String, remote: String },
+    PathOutsideRepo(PathBuf),
     NoStagedChanges,
     EmptyMessage,
     NoApiKey,
@@ -47,6 +48,9 @@ impl fmt::Display for Error {
             Error::NoCurrentBranch => write!(f, "could not determine the current branch"),
             Error::BranchNotFound { branch, remote } => {
                 write!(f, "branch '{}' not found in remote '{}'", branch, remote)
+            }
+            Error::PathOutsideRepo(p) => {
+                write!(f, "path is outside the repository: {}", p.display())
             }
             Error::NoStagedChanges => write!(
                 f,
