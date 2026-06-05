@@ -3,15 +3,16 @@
 ## Feature
 
 - Ship native Git subcommands: `git open`, `git ac` (AI commit), `git issues`
-- `git ac` stages all changes by default; `-e` opens the editor, `-p` previews
-  only, `-n` commits only what is already staged
+- `git ac` commits the staged changes (like `git commit`); `-a` stages all
+  changes first, `-e` opens the editor, `-p` previews only
 
 ## Change
 
 - Remove the `git-github` umbrella binary; each command is now its own native
   subcommand
-- AI commit: bare run previews only, default stages all and commits, `-e` opens
-  the editor (replaces the old `-a`/`-m` semantics)
+- AI commit: bare run commits only the staged changes, `-a` stages all first,
+  `-e` opens the editor
+- With nothing staged, `git ac` prints a hint to use `git add` or `git ac -a`
 
 ## Fix
 

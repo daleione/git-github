@@ -43,7 +43,10 @@ impl fmt::Display for Error {
             Error::BranchNotFound { branch, remote } => {
                 write!(f, "branch '{}' not found in remote '{}'", branch, remote)
             }
-            Error::NoStagedChanges => write!(f, "no staged changes found"),
+            Error::NoStagedChanges => write!(
+                f,
+                "no staged changes found; stage files with `git add <path>`, or run `git ac -a` to stage all changes"
+            ),
             Error::NoApiKey => write!(
                 f,
                 "no DeepSeek API key found; set `api_key` in ~/.config/git-github/config.toml"

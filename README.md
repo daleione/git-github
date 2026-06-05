@@ -27,7 +27,7 @@ Each command is a native Git subcommand.
 | Command      | Description                          |
 | ------------ | ------------------------------------ |
 | `git open`   | Open the repo page in your browser   |
-| `git ac`     | Stage all changes and AI-commit      |
+| `git ac`     | AI-commit the staged changes         |
 | `git issues` | List repository issues               |
 
 > `git <cmd> --help` is intercepted by Git to look for a man page. Use the short
@@ -53,20 +53,22 @@ Options:
 
 ### `git ac` — AI commit
 
-Generates a commit message from your changes using the DeepSeek API.
+Generates a commit message from your **staged** changes using the DeepSeek API.
+Like `git commit`, it commits only what you have staged; pass `-a` to stage all
+changes first.
 
 ```bash
-git ac          # stage all changes, generate a message, and commit
-git ac -e       # stage all, generate, then open the editor to review
+git ac          # commit the staged changes with an AI-generated message
+git ac -a       # stage all changes first, then generate and commit
+git ac -e       # generate, then open the editor to review before committing
 git ac -p       # preview the message only (no staging, no commit)
-git ac -n       # commit only what is already staged (skip auto-staging)
 ```
 
 Options:
 
+- `-a`, `--all`: stage all changes before committing (like `git add -A`)
 - `-e`, `--edit`: open the editor to review/edit before committing
 - `-p`, `--preview`: only preview the message; do not stage or commit
-- `-n`, `--no-stage`: do not stage; commit only what is already staged
 
 ### `git issues`
 
