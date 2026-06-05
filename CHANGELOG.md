@@ -8,6 +8,8 @@
 - `git ac`: on a TTY, review the generated message before committing —
   accept / edit / regenerate (with optional guidance) / abort; piped input
   still commits immediately
+- `git open <path>`: open a file on GitHub, optionally anchored to a line
+  (`path:42`) or range (`path:40-50`), at the current branch/commit
 
 # v0.1.6 2026-06-03
 
