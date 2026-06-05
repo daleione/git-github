@@ -127,7 +127,8 @@ pub fn run(stage: bool, mode: CommitMode) -> Result<()> {
                     return Ok(());
                 }
                 Action::Regenerate => {
-                    let hint = prompt_line("Any guidance for the rewrite? (optional): ")?;
+                    let hint = prompt_line("Any guidance for the rewrite? (optional): ")?
+                        .unwrap_or_default();
                     if !hint.is_empty() {
                         guidance.push(hint);
                     }
@@ -144,8 +145,12 @@ pub fn run(stage: bool, mode: CommitMode) -> Result<()> {
 /// Ask what to do with the generated message, repeating on invalid input.
 fn prompt_action() -> Result<Action> {
     loop {
-        let choice =
-            prompt_line("Commit this message? [Y]es / [e]dit / [r]egenerate / [a]bort: ")?;
+        // EOF (Ctrl-D) aborts rather than falling through to the default.
+        let Some(choice) =
+            prompt_line("Commit this message? [Y]es / [e]dit / [r]egenerate / [a]bort: ")?
+        else {
+            return Ok(Action::Abort);
+        };
         match choice.to_lowercase().as_str() {
             "" | "y" | "yes" => return Ok(Action::Commit),
             "e" | "edit" => return Ok(Action::Edit),
@@ -156,13 +161,15 @@ fn prompt_action() -> Result<Action> {
     }
 }
 
-/// Print `prompt` and read a trimmed line from stdin.
-fn prompt_line(prompt: &str) -> Result<String> {
+/// Print `prompt` and read a trimmed line from stdin. Returns `None` on EOF.
+fn prompt_line(prompt: &str) -> Result<Option<String>> {
     print!("{prompt}");
     io::stdout().flush()?;
     let mut input = String::new();
-    io::stdin().read_line(&mut input)?;
-    Ok(input.trim().to_string())
+    if io::stdin().read_line(&mut input)? == 0 {
+        return Ok(None);
+    }
+    Ok(Some(input.trim().to_string()))
 }
 
 /// Commit the staged changes via `git commit -F`, so pre-commit/commit-msg

@@ -90,6 +90,7 @@ git pr               # PR into the repo's default branch
 git pr -b dev        # target the 'dev' branch
 git pr -d            # create as a draft
 git pr -e            # edit the title/body before creating
+git pr --no-push     # branch is already pushed; just open the PR
 ```
 
 Options:
@@ -97,10 +98,13 @@ Options:
 - `-b`, `--base <BASE>`: base branch to merge into (default: the repo's default branch)
 - `-d`, `--draft`: create the pull request as a draft
 - `-e`, `--edit`: open the editor to review/edit the title and body first
+- `--no-push`: do not push the branch first (assume it is already on the remote)
 - `-r`, `--remote <REMOTE>`: remote name (default: `origin`)
 
-Requires a `GITHUB_TOKEN` (or `GH_TOKEN`) env var, and a DeepSeek API key for the
-description.
+Requires a token (from `GITHUB_TOKEN`/`GH_TOKEN`, or the `gh` CLI) and a DeepSeek
+API key for the description. The PR is opened on `<remote>` with the current
+branch as its head, so this targets same-repository pull requests (not
+cross-fork PRs).
 
 ### `git issues`
 

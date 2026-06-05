@@ -20,6 +20,10 @@ struct Cli {
     #[clap(short, long)]
     edit: bool,
 
+    /// Do not push the branch; assume it is already on the remote
+    #[clap(long)]
+    no_push: bool,
+
     /// Remote name
     #[clap(short, long, default_value = "origin")]
     remote: String,
@@ -32,5 +36,6 @@ fn main() -> ExitCode {
         base: cli.base,
         draft: cli.draft,
         edit: cli.edit,
+        no_push: cli.no_push,
     }))
 }

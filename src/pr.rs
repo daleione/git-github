@@ -16,6 +16,7 @@ pub struct Options {
     pub base: Option<String>,
     pub draft: bool,
     pub edit: bool,
+    pub no_push: bool,
 }
 
 /// Create a GitHub pull request for the current branch, with an AI-drafted
@@ -68,10 +69,6 @@ pub fn create(opts: Options) -> Result<()> {
     }
     let diff = truncate(&git_capture(&["diff", &format!("{}...HEAD", base_ref)])?);
 
-    // Publish the branch so the PR head exists (and is up to date) on the remote.
-    println!("Pushing {} to {}...", head, opts.remote);
-    git_run(&["push", "-u", &opts.remote, &head])?;
-
     print_banner("AI Drafting Pull Request");
     let model = config.deepseek.model.as_deref().unwrap_or("deepseek-chat");
     let drafted = llm::stream_and_collect(
@@ -94,6 +91,13 @@ pub fn create(opts: Options) -> Result<()> {
         if title.is_empty() {
             return Err(Error::EmptyMessage);
         }
+    }
+
+    // Publish the branch (now that we're committed to creating the PR) so the
+    // head exists and is up to date on the remote.
+    if !opts.no_push {
+        println!("Pushing {} to {}...", head, opts.remote);
+        git_run(&["push", "-u", &opts.remote, &head])?;
     }
 
     let (owner, name, head_ref, base_ref) =

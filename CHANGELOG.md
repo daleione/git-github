@@ -15,6 +15,10 @@
 
 ## Fix
 
+- `git pr` now pushes the branch only once the PR is about to be created (after
+  any editor review), and gains `--no-push` to skip pushing entirely
+- `git ac` aborts instead of committing when the review prompt receives EOF
+  (Ctrl-D)
 - `git issues`/`git pr` no longer panic at startup: use native-tls for reqwest
   so it does not add a second rustls CryptoProvider alongside octocrab's, and
   build the GitHub client inside the tokio runtime so it has a reactor
