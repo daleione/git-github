@@ -34,14 +34,16 @@ pub fn create(opts: Options) -> Result<()> {
     if github::token().is_none() {
         return Err(Error::NoGitHubToken);
     }
-    let client = github::client()?;
 
     // Resolve the base branch: an explicit `--base`, else the repo's default.
     let base = match opts.base.clone() {
         Some(base) => base,
-        None => block_on(client.repos(&remote.user, &remote.repo).get())??
-            .default_branch
-            .ok_or(Error::NoDefaultBranch)?,
+        None => {
+            let (owner, name) = (remote.user.clone(), remote.repo.clone());
+            run_github(|client| async move { client.repos(owner, name).get().await })?
+                .default_branch
+                .ok_or(Error::NoDefaultBranch)?
+        }
     };
     if base == head {
         return Err(Error::NoCommitsForPr(base));
@@ -94,14 +96,18 @@ pub fn create(opts: Options) -> Result<()> {
         }
     }
 
-    let pull = block_on(
+    let (owner, name, head_ref, base_ref) =
+        (remote.user.clone(), remote.repo.clone(), head.clone(), base.clone());
+    let draft = opts.draft;
+    let pull = run_github(move |client| async move {
         client
-            .pulls(&remote.user, &remote.repo)
-            .create(&title, &head, &base)
+            .pulls(owner, name)
+            .create(title, head_ref, base_ref)
             .body(body)
-            .draft(opts.draft)
-            .send(),
-    )??;
+            .draft(draft)
+            .send()
+            .await
+    })?;
 
     print_banner("✅ Pull Request Created");
     match pull.html_url {
@@ -209,11 +215,21 @@ fn git_run(args: &[&str]) -> Result<()> {
     Ok(())
 }
 
-fn block_on<F: Future>(future: F) -> Result<F::Output> {
+/// Run a GitHub operation, building the client inside the runtime so its
+/// hyper/tower stack has a reactor (octocrab's buffered client panics
+/// otherwise).
+fn run_github<F, Fut, T>(op: F) -> Result<T>
+where
+    F: FnOnce(octocrab::Octocrab) -> Fut,
+    Fut: Future<Output = octocrab::Result<T>>,
+{
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
-    Ok(rt.block_on(future))
+    rt.block_on(async move {
+        let client = github::client()?;
+        op(client).await.map_err(Error::from)
+    })
 }
 
 fn print_banner(title: &str) {

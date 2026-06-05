@@ -11,6 +11,12 @@
 - `git open <path>`: open a file on GitHub, optionally anchored to a line
   (`path:42`) or range (`path:40-50`), at the current branch/commit
 
+## Fix
+
+- `git issues`/`git pr` no longer panic at startup: use native-tls for reqwest
+  so it does not add a second rustls CryptoProvider alongside octocrab's, and
+  build the GitHub client inside the tokio runtime so it has a reactor
+
 # v0.1.6 2026-06-03
 
 ## Feature

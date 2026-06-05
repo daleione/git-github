@@ -9,13 +9,15 @@ pub fn list_issues(remote_name: &str, state: params::State) -> Result<()> {
     let repo = Repo::new(&path)?;
     let remote = repo.remote(remote_name)?;
 
-    let client = github::client()?;
-
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
 
     rt.block_on(async {
+        // Build the client inside the runtime so its hyper/tower stack has a
+        // reactor; octocrab's buffered client panics otherwise.
+        let client = github::client()?;
+
         let first = client
             .issues(&remote.user, &remote.repo)
             .list()
