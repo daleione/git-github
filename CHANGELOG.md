@@ -10,6 +10,8 @@
   still commits immediately
 - `git open <path>`: open a file on GitHub, optionally anchored to a line
   (`path:42`) or range (`path:40-50`), at the current branch/commit
+- GitHub token resolution falls back to the `gh` CLI (`gh auth token`), so a
+  machine authenticated with `gh auth login` works without exporting a token
 
 ## Fix
 
