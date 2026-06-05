@@ -5,6 +5,9 @@
 - `git pr`: push the current branch and open a GitHub pull request with an
   AI-generated title and description (from the commits/diff vs the base branch);
   supports `-b/--base`, `-d/--draft`, `-e/--edit`, `-r/--remote`
+- `git ac`: on a TTY, review the generated message before committing —
+  accept / edit / regenerate (with optional guidance) / abort; piped input
+  still commits immediately
 
 # v0.1.6 2026-06-03
 

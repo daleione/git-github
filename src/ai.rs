@@ -4,6 +4,7 @@ use crate::llm::{self, ChatMessage};
 use crate::repo::Repo;
 use std::env;
 use std::fs;
+use std::io::{self, IsTerminal, Write};
 use std::process::Command;
 
 fn print_banner(title: &str) {
@@ -55,42 +56,113 @@ pub enum CommitMode {
     Editor,
 }
 
+/// What the user chose to do with a generated message in interactive mode.
+enum Action {
+    Commit,
+    Edit,
+    Regenerate,
+    Abort,
+}
+
 /// Generate a commit message from the staged changes and act on it per `mode`.
 pub fn run(stage: bool, mode: CommitMode) -> Result<()> {
     let (repo, changes, config) = prepare(stage)?;
-    let messages = build_prompt_messages(&changes, config.deepseek.prompt);
-
-    print_banner(match mode {
-        CommitMode::Editor => "AI Generating Commit Message",
-        _ => "AI Suggested Commit Message",
-    });
-
     let model = config.deepseek.model.as_deref().unwrap_or("deepseek-chat");
-    let message = llm::stream_and_collect(
-        &config.deepseek.api_key,
-        model,
-        messages,
-        config.deepseek.temperature,
-    )?;
 
-    if !matches!(mode, CommitMode::Preview) && message.trim().is_empty() {
-        return Err(Error::EmptyMessage);
-    }
+    // In Apply mode on a TTY, let the user review the message before it lands
+    // (accept / edit / regenerate / abort). Piped input keeps the old
+    // commit-immediately behavior so scripts are unaffected.
+    let interactive = matches!(mode, CommitMode::Apply) && io::stdin().is_terminal();
 
-    match mode {
-        CommitMode::Preview => {}
-        CommitMode::Apply => {
-            commit_via_git(&message, false)?;
-            print_banner("✅ Commit Successful");
-            println!("Commit ID: {}\n", repo.head_commit_id()?);
+    // Extra instructions accumulated from "regenerate" guidance.
+    let mut guidance: Vec<String> = Vec::new();
+
+    loop {
+        print_banner(match mode {
+            CommitMode::Editor => "AI Generating Commit Message",
+            _ => "AI Suggested Commit Message",
+        });
+
+        let mut messages = build_prompt_messages(&changes, config.deepseek.prompt.clone());
+        for hint in &guidance {
+            messages.push(ChatMessage::user(format!(
+                "Please revise the commit message: {hint}"
+            )));
         }
-        CommitMode::Editor => {
-            commit_via_git(&message, true)?;
-            print_banner("✅ Commit Completed");
+
+        let message = llm::stream_and_collect(
+            &config.deepseek.api_key,
+            model,
+            messages,
+            config.deepseek.temperature,
+        )?;
+
+        if !matches!(mode, CommitMode::Preview) && message.trim().is_empty() {
+            return Err(Error::EmptyMessage);
+        }
+
+        match mode {
+            CommitMode::Preview => return Ok(()),
+            CommitMode::Editor => {
+                commit_via_git(&message, true)?;
+                print_banner("✅ Commit Completed");
+                return Ok(());
+            }
+            CommitMode::Apply if !interactive => {
+                commit_via_git(&message, false)?;
+                print_banner("✅ Commit Successful");
+                println!("Commit ID: {}\n", repo.head_commit_id()?);
+                return Ok(());
+            }
+            CommitMode::Apply => match prompt_action()? {
+                Action::Commit => {
+                    commit_via_git(&message, false)?;
+                    print_banner("✅ Commit Successful");
+                    println!("Commit ID: {}\n", repo.head_commit_id()?);
+                    return Ok(());
+                }
+                Action::Edit => {
+                    commit_via_git(&message, true)?;
+                    print_banner("✅ Commit Completed");
+                    return Ok(());
+                }
+                Action::Regenerate => {
+                    let hint = prompt_line("Any guidance for the rewrite? (optional): ")?;
+                    if !hint.is_empty() {
+                        guidance.push(hint);
+                    }
+                }
+                Action::Abort => {
+                    println!("Aborted; nothing committed.");
+                    return Ok(());
+                }
+            },
         }
     }
+}
 
-    Ok(())
+/// Ask what to do with the generated message, repeating on invalid input.
+fn prompt_action() -> Result<Action> {
+    loop {
+        let choice =
+            prompt_line("Commit this message? [Y]es / [e]dit / [r]egenerate / [a]bort: ")?;
+        match choice.to_lowercase().as_str() {
+            "" | "y" | "yes" => return Ok(Action::Commit),
+            "e" | "edit" => return Ok(Action::Edit),
+            "r" | "regenerate" => return Ok(Action::Regenerate),
+            "a" | "abort" | "q" | "quit" => return Ok(Action::Abort),
+            _ => println!("Please enter Y, e, r, or a."),
+        }
+    }
+}
+
+/// Print `prompt` and read a trimmed line from stdin.
+fn prompt_line(prompt: &str) -> Result<String> {
+    print!("{prompt}");
+    io::stdout().flush()?;
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+    Ok(input.trim().to_string())
 }
 
 /// Commit the staged changes via `git commit -F`, so pre-commit/commit-msg
