@@ -58,6 +58,11 @@ Generates a commit message from your **staged** changes using the DeepSeek API.
 Like `git commit`, it commits only what you have staged; pass `-a` to stage all
 changes first.
 
+On an interactive terminal, `git ac` shows the generated message and asks what
+to do — **[Y]es** to commit, **[e]dit** in your editor, **[r]egenerate** (with
+optional guidance), or **[a]bort**. When the input is piped, it commits straight
+away so scripts are unaffected.
+
 ```bash
 git ac          # commit the staged changes with an AI-generated message
 git ac -a       # stage all changes first, then generate and commit
