@@ -7,27 +7,17 @@ use std::fs;
 use std::io::{self, IsTerminal, Write};
 use std::process::Command;
 
-fn print_banner(title: &str) {
-    let max_width = 100;
-    let min_width = 60;
-    let padding = 4;
-    // Count characters, not bytes, so multibyte titles (e.g. "✅ …") still
-    // size and center the banner correctly.
-    let title_width = title.chars().count();
-    let raw_width = title_width + padding * 2;
-    let total_width = std::cmp::min(max_width, std::cmp::max(min_width, raw_width));
-    let banner_line = "=".repeat(total_width);
+use crate::style;
 
-    let title_padding = (total_width - title_width) / 2;
-
-    println!("{}", banner_line);
-    println!(
-        "{}{}{}",
-        " ".repeat(title_padding),
-        title,
-        " ".repeat(total_width - title_padding - title_width)
-    );
-    println!("{}", banner_line);
+/// Report a successful commit as `✓ Committed <short-sha> on <branch>`.
+fn report_commit(repo: &Repo) -> Result<()> {
+    let short = repo.head_short_id()?;
+    let line = match repo.current_branch() {
+        Ok(branch) => format!("Committed {} {}", style::cyan(&short), style::dim(&format!("on {branch}"))),
+        Err(_) => format!("Committed {}", style::cyan(&short)),
+    };
+    style::success(&line);
+    Ok(())
 }
 
 /// Shared setup for every commit entry point: open the repo, optionally stage,
@@ -78,10 +68,10 @@ pub fn run(stage: bool, mode: CommitMode) -> Result<()> {
     let mut guidance: Vec<String> = Vec::new();
 
     loop {
-        print_banner(match mode {
-            CommitMode::Editor => "AI Generating Commit Message",
-            _ => "AI Suggested Commit Message",
-        });
+        let title = match mode {
+            CommitMode::Editor => "Generating commit message",
+            _ => "Suggested commit message",
+        };
 
         let mut messages = build_prompt_messages(&changes, config.deepseek.prompt.clone());
         for hint in &guidance {
@@ -91,6 +81,7 @@ pub fn run(stage: bool, mode: CommitMode) -> Result<()> {
         }
 
         let message = llm::stream_and_collect(
+            title,
             &config.deepseek.api_key,
             model,
             messages,
@@ -105,25 +96,23 @@ pub fn run(stage: bool, mode: CommitMode) -> Result<()> {
             CommitMode::Preview => return Ok(()),
             CommitMode::Editor => {
                 commit_via_git(&message, true)?;
-                print_banner("✅ Commit Completed");
+                report_commit(&repo)?;
                 return Ok(());
             }
             CommitMode::Apply if !interactive => {
                 commit_via_git(&message, false)?;
-                print_banner("✅ Commit Successful");
-                println!("Commit ID: {}\n", repo.head_commit_id()?);
+                report_commit(&repo)?;
                 return Ok(());
             }
             CommitMode::Apply => match prompt_action()? {
                 Action::Commit => {
                     commit_via_git(&message, false)?;
-                    print_banner("✅ Commit Successful");
-                    println!("Commit ID: {}\n", repo.head_commit_id()?);
+                    report_commit(&repo)?;
                     return Ok(());
                 }
                 Action::Edit => {
                     commit_via_git(&message, true)?;
-                    print_banner("✅ Commit Completed");
+                    report_commit(&repo)?;
                     return Ok(());
                 }
                 Action::Regenerate => {
@@ -144,20 +133,34 @@ pub fn run(stage: bool, mode: CommitMode) -> Result<()> {
 
 /// Ask what to do with the generated message, repeating on invalid input.
 fn prompt_action() -> Result<Action> {
+    // The prompt is transient: a blank line sets it apart from the message
+    // above, and we tally every line it draws so the whole block can be erased
+    // once the user decides — leaving only the outcome on screen.
+    println!();
+    let mut drawn = 1;
     loop {
-        // EOF (Ctrl-D) aborts rather than falling through to the default.
-        let Some(choice) =
-            prompt_line("Commit this message? [Y]es / [e]dit / [r]egenerate / [a]bort: ")?
+        // EOF (Ctrl-D) aborts; leave the prompt visible since there's no echo.
+        let Some(choice) = prompt_line(&style::prompt(
+            "Commit this message?",
+            "[Y]es / [e]dit / [r]egenerate / [a]bort",
+        ))?
         else {
             return Ok(Action::Abort);
         };
-        match choice.to_lowercase().as_str() {
-            "" | "y" | "yes" => return Ok(Action::Commit),
-            "e" | "edit" => return Ok(Action::Edit),
-            "r" | "regenerate" => return Ok(Action::Regenerate),
-            "a" | "abort" | "q" | "quit" => return Ok(Action::Abort),
-            _ => println!("Please enter Y, e, r, or a."),
-        }
+        drawn += 1; // the prompt line, with the user's echoed answer
+        let action = match choice.to_lowercase().as_str() {
+            "" | "y" | "yes" => Action::Commit,
+            "e" | "edit" => Action::Edit,
+            "r" | "regenerate" => Action::Regenerate,
+            "a" | "abort" | "q" | "quit" => Action::Abort,
+            _ => {
+                println!("Please enter Y, e, r, or a.");
+                drawn += 1;
+                continue;
+            }
+        };
+        style::erase_lines(drawn);
+        return Ok(action);
     }
 }
 
@@ -181,9 +184,11 @@ fn commit_via_git(message: &str, edit: bool) -> Result<()> {
     fs::write(&temp_file, message.trim())?;
 
     let mut command = Command::new("git");
-    command.arg("commit");
+    // `-q` suppresses git's own `[branch sha] summary` + diffstat; we print a
+    // clean success line ourselves.
+    command.args(["commit", "-q"]);
     if edit {
-        print_banner("Opening Editor for Review");
+        style::header("Opening editor for review");
         // `-e` opens the editor to edit the seeded message; `-F` (below) does
         // not abort when the message is left unchanged, unlike `--template`.
         command.args(["-e", "-v"]);

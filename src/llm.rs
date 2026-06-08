@@ -50,38 +50,62 @@ struct DeltaMessage {
     content: Option<String>,
 }
 
-/// Stream a chat completion, echoing each completed line as `| ...`, and return
-/// the full collected message. Runs the async request on a local runtime so
+/// Stream a chat completion live and return the full collected message.
+///
+/// A spinner animates `title` while we wait for the model; the first token
+/// settles it into a static header, then the body is revealed character by
+/// character under a `│` gutter. Runs the async request on a local runtime so
 /// callers stay synchronous.
 pub fn stream_and_collect(
+    title: &str,
     api_key: &str,
     model: &str,
     messages: Vec<ChatMessage>,
     temperature: Option<f32>,
 ) -> Result<String> {
+    use std::io::Write;
+
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
     let mut full_message = String::new();
-    let mut current_line = String::new();
+    // `Some` until the first token settles the header; `take`n exactly once.
+    let mut spinner = Some(crate::style::Spinner::start(title));
+    let mut at_line_start = true;
 
     rt.block_on(async {
         stream_chat(api_key, model, messages, temperature, |content| {
+            // First content arriving stops the spinner and prints the header.
+            if let Some(spinner) = spinner.take() {
+                spinner.finish();
+            }
             for ch in content.chars() {
-                current_line.push(ch);
-                if ch == '\n' {
-                    println!("| {}", current_line.trim_end());
-                    full_message.push_str(&current_line);
-                    current_line.clear();
+                full_message.push(ch);
+                if at_line_start {
+                    print!("{} ", crate::style::gutter());
+                    at_line_start = false;
                 }
+                if ch == '\n' {
+                    println!();
+                    at_line_start = true;
+                } else {
+                    print!("{ch}");
+                }
+                // Flush and pace each character so it reveals one at a time.
+                let _ = std::io::stdout().flush();
+                crate::style::tick();
             }
         })
         .await
     })?;
 
-    if !current_line.trim().is_empty() {
-        println!("| {}", current_line.trim_end());
-        full_message.push_str(&current_line);
+    // An empty response never settled the spinner; do it so the header shows.
+    if let Some(spinner) = spinner.take() {
+        spinner.finish();
+    }
+    // Close the final line when the body didn't end with a newline.
+    if !at_line_start {
+        println!();
     }
 
     Ok(full_message)

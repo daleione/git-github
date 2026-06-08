@@ -10,6 +10,7 @@ pub mod open;
 pub mod pr;
 mod remote;
 mod repo;
+mod style;
 
 pub use error::{Error, Result};
 

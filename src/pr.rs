@@ -69,9 +69,9 @@ pub fn create(opts: Options) -> Result<()> {
     }
     let diff = truncate(&git_capture(&["diff", &format!("{}...HEAD", base_ref)])?);
 
-    print_banner("AI Drafting Pull Request");
     let model = config.deepseek.model.as_deref().unwrap_or("deepseek-chat");
     let drafted = llm::stream_and_collect(
+        "Drafting pull request",
         &config.deepseek.api_key,
         model,
         build_prompt(&commits, &diff),
@@ -113,7 +113,7 @@ pub fn create(opts: Options) -> Result<()> {
             .await
     })?;
 
-    print_banner("✅ Pull Request Created");
+    crate::style::success("Pull request created");
     match pull.html_url {
         Some(url) => println!("{}", url),
         None => println!("Created pull request into {}", base),
@@ -236,11 +236,3 @@ where
     })
 }
 
-fn print_banner(title: &str) {
-    let width = std::cmp::max(60, title.chars().count() + 8);
-    let line = "=".repeat(width);
-    let pad = (width - title.chars().count()) / 2;
-    println!("{line}");
-    println!("{}{}", " ".repeat(pad), title);
-    println!("{line}");
-}

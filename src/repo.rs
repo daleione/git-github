@@ -180,10 +180,23 @@ impl Repo {
         Ok(changes)
     }
 
-    /// The short id of the current `HEAD` commit, for reporting after a commit.
+    /// The full id of the current `HEAD` commit (used to build permalinks).
     pub fn head_commit_id(&self) -> Result<String> {
         let commit = self.repository.head()?.peel_to_commit()?;
         Ok(commit.id().to_string())
+    }
+
+    /// The abbreviated id of the current `HEAD` commit (git's default length),
+    /// for reporting after a commit. Falls back to the full id if abbreviation
+    /// is unavailable.
+    pub fn head_short_id(&self) -> Result<String> {
+        let commit = self.repository.head()?.peel_to_commit()?;
+        let short = commit
+            .as_object()
+            .short_id()
+            .ok()
+            .and_then(|buf| std::str::from_utf8(&buf).ok().map(str::to_string));
+        Ok(short.unwrap_or_else(|| commit.id().to_string()))
     }
 
     /// Convert `input` (absolute, or relative to the current directory) into a
