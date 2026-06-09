@@ -70,7 +70,7 @@ pub fn run(stage: bool, mode: CommitMode) -> Result<()> {
     loop {
         let title = match mode {
             CommitMode::Editor => "Generating commit message",
-            _ => "Suggested commit message",
+            _ => "Thinking",
         };
 
         let mut messages = build_prompt_messages(&changes, config.deepseek.prompt.clone());
@@ -132,35 +132,98 @@ pub fn run(stage: bool, mode: CommitMode) -> Result<()> {
 }
 
 /// Ask what to do with the generated message, repeating on invalid input.
+/// Reads a single keypress (no Enter needed); the prompt block is erased once
+/// the user decides, leaving only the outcome on screen.
 fn prompt_action() -> Result<Action> {
-    // The prompt is transient: a blank line sets it apart from the message
-    // above, and we tally every line it draws so the whole block can be erased
-    // once the user decides — leaving only the outcome on screen.
+    // A blank line sets the prompt apart from the message above; we tally every
+    // line it draws so the whole block can be erased as one unit.
     println!();
     let mut drawn = 1;
     loop {
-        // EOF (Ctrl-D) aborts; leave the prompt visible since there's no echo.
-        let Some(choice) = prompt_line(&style::prompt(
-            "Commit this message?",
-            "[Y]es / [e]dit / [r]egenerate / [a]bort",
-        ))?
-        else {
+        print!(
+            "{}",
+            style::prompt(
+                "Commit this message",
+                "[Y]es / [e]dit / [r]egenerate / [a]bort",
+            )
+        );
+        io::stdout().flush()?;
+
+        // EOF (Ctrl-D) aborts.
+        let Some(key) = read_key()? else {
+            println!();
             return Ok(Action::Abort);
         };
-        drawn += 1; // the prompt line, with the user's echoed answer
-        let action = match choice.to_lowercase().as_str() {
-            "" | "y" | "yes" => Action::Commit,
-            "e" | "edit" => Action::Edit,
-            "r" | "regenerate" => Action::Regenerate,
-            "a" | "abort" | "q" | "quit" => Action::Abort,
+        let key = key.to_ascii_lowercase();
+        // Echo a readable form of the keypress and move to the next line so the
+        // block erases cleanly. Enter shows as the default `Y`.
+        let shown = if key == '\r' || key == '\n' { 'Y' } else { key };
+        println!("{shown}");
+        drawn += 1;
+
+        let action = match key {
+            '\r' | '\n' | 'y' => Action::Commit,
+            'e' => Action::Edit,
+            'r' => Action::Regenerate,
+            'a' | 'q' => Action::Abort,
             _ => {
-                println!("Please enter Y, e, r, or a.");
+                println!("Please press Y, e, r, or a.");
                 drawn += 1;
                 continue;
             }
         };
         style::erase_lines(drawn);
         return Ok(action);
+    }
+}
+
+/// Read a single keypress from the terminal without waiting for Enter, by
+/// briefly switching stdin out of canonical mode. Returns `None` on EOF.
+/// `Ctrl-C` still interrupts (we leave `ISIG` enabled).
+#[cfg(unix)]
+fn read_key() -> Result<Option<char>> {
+    use std::os::unix::io::AsRawFd;
+
+    let fd = io::stdin().as_raw_fd();
+    let mut orig: libc::termios = unsafe { std::mem::zeroed() };
+    if unsafe { libc::tcgetattr(fd, &mut orig) } != 0 {
+        // Not a real terminal — fall back to a line read.
+        return read_key_line();
+    }
+
+    let mut raw = orig;
+    raw.c_lflag &= !(libc::ICANON | libc::ECHO);
+    raw.c_cc[libc::VMIN] = 1;
+    raw.c_cc[libc::VTIME] = 0;
+    unsafe { libc::tcsetattr(fd, libc::TCSANOW, &raw) };
+
+    // Read one byte straight from the fd to bypass std's input buffering.
+    let mut buf = [0u8; 1];
+    let n = unsafe { libc::read(fd, buf.as_mut_ptr() as *mut libc::c_void, 1) };
+
+    // Always restore the terminal before returning.
+    unsafe { libc::tcsetattr(fd, libc::TCSANOW, &orig) };
+
+    if n < 0 {
+        return Err(io::Error::last_os_error().into());
+    }
+    if n == 0 {
+        return Ok(None);
+    }
+    Ok(Some(buf[0] as char))
+}
+
+#[cfg(not(unix))]
+fn read_key() -> Result<Option<char>> {
+    read_key_line()
+}
+
+/// Fallback key read for non-terminals / non-Unix: read a line (Enter needed)
+/// and take its first character; an empty line counts as Enter.
+fn read_key_line() -> Result<Option<char>> {
+    match prompt_line("")? {
+        None => Ok(None),
+        Some(line) => Ok(Some(line.chars().next().unwrap_or('\n'))),
     }
 }
 

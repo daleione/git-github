@@ -86,30 +86,48 @@ pub fn erase_lines(n: usize) {
 /// Braille frames for the loading spinner (same family Claude Code uses).
 const SPIN_FRAMES: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
-/// An animated header shown while the model is generating. The leading glyph
-/// spins on its own thread until [`Spinner::finish`] settles it into the static
-/// `✦ title`, after which the streamed body follows on the next line.
+/// The animated loading text for a given `frame`: the title typed out one
+/// character at a time, then a cycling 0–3 dot "working" suffix (it loops back
+/// to none rather than growing without bound).
+fn loading_label(frame: usize, title: &str) -> String {
+    let chars: Vec<char> = title.chars().collect();
+    if frame < chars.len() {
+        // Still typing the title out.
+        chars[..=frame].iter().collect()
+    } else {
+        // Title fully shown; cycle the trailing dots (advancing every 2 frames).
+        let dots = (frame - chars.len()) / 2 % 4;
+        let mut label: String = chars.iter().collect();
+        for _ in 0..dots {
+            label.push('.');
+        }
+        label
+    }
+}
+
+/// A loading spinner shown on the header line while the model generates. The
+/// glyph spins on its own thread, animating `⠋ title`, until [`Spinner::stop`]
+/// halts it — leaving the cursor at the start of that same line so the caller
+/// can transform it in place (see [`reveal`]).
 ///
-/// When styling is disabled the header is printed once, statically, and no
-/// thread is spawned — so piped output and `NO_COLOR` stay clean.
+/// When styling is disabled no thread is spawned and nothing is printed, so
+/// piped output and `NO_COLOR` stay clean.
 pub struct Spinner {
     stop: Arc<AtomicBool>,
     handle: Option<JoinHandle<()>>,
-    title: String,
 }
 
 impl Spinner {
-    /// Start the animation (preceded by a blank line, matching [`header`]).
+    /// Start the animation, preceded by a blank line separating it from the
+    /// previous output.
     pub fn start(title: &str) -> Spinner {
-        println!();
         if !enabled() {
-            println!("{title}");
             return Spinner {
                 stop: Arc::new(AtomicBool::new(true)),
                 handle: None,
-                title: title.to_string(),
             };
         }
+        println!();
 
         let stop = Arc::new(AtomicBool::new(false));
         let stop_thread = stop.clone();
@@ -118,7 +136,9 @@ impl Spinner {
             let mut frame = 0;
             while !stop_thread.load(Ordering::Relaxed) {
                 let glyph = SPIN_FRAMES[frame % SPIN_FRAMES.len()];
-                print!("\r{} {}", cyan(glyph), bold(&title_thread));
+                let label = loading_label(frame, &title_thread);
+                // `2K` clears the line so shrinking dots leave no leftovers.
+                print!("\r\x1b[2K{} {}", cyan(glyph), bold(&label));
                 let _ = std::io::stdout().flush();
                 frame += 1;
                 thread::sleep(Duration::from_millis(80));
@@ -128,28 +148,23 @@ impl Spinner {
         Spinner {
             stop,
             handle: Some(handle),
-            title: title.to_string(),
         }
     }
 
-    /// Stop the animation and settle the header into a static `✦ title` on its
-    /// own line, leaving the cursor ready for the streamed body below.
-    pub fn finish(mut self) {
+    /// Halt the animation, leaving the cursor at column 0 of the header line.
+    pub fn stop(mut self) {
         if let Some(handle) = self.handle.take() {
             self.stop.store(true, Ordering::Relaxed);
             let _ = handle.join();
-            // Clear the spinner frame and write the final header.
-            print!("\r\x1b[2K{} {}", cyan("✦"), bold(&self.title));
-            println!();
+            print!("\r");
             let _ = std::io::stdout().flush();
         }
-        // When disabled the header was already printed in `start`.
     }
 }
 
 impl Drop for Spinner {
     fn drop(&mut self) {
-        // Ensure the thread is signalled even if `finish` was never called.
+        // Ensure the thread is signalled even if `stop` was never called.
         if let Some(handle) = self.handle.take() {
             self.stop.store(true, Ordering::Relaxed);
             let _ = handle.join();
@@ -157,11 +172,76 @@ impl Drop for Spinner {
     }
 }
 
-/// Pace streamed output into a one-character-at-a-time "typewriter" reveal:
-/// a short sleep between characters. No-op when styling is disabled, so piped
-/// output streams at full speed.
-pub fn tick() {
+/// Transform the header line — assumed to be the cursor's current line — from
+/// the static `✦ title` label into the generated `message`, all in place:
+/// settle the label, retract it character by character, then type the message
+/// out on the same line. Extra message lines (if any) follow under a gutter.
+///
+/// When styling is disabled the message is printed plainly under a gutter, so
+/// piped output is unchanged.
+pub fn reveal(title: &str, message: &str) {
+    let message = message.trim_end();
+    if !enabled() {
+        for line in message.lines() {
+            println!("{} {}", gutter(), line);
+        }
+        return;
+    }
+
+    // 1. Keep the glyph spinning and the dots cycling for a couple of cycles
+    //    (the title is already fully typed by now), then settle into `✦` and
+    //    hold a beat.
+    let grown = title.chars().count();
+    for step in 0..SPIN_FRAMES.len() * 2 {
+        let glyph = SPIN_FRAMES[step % SPIN_FRAMES.len()];
+        let label = loading_label(grown + step, title);
+        print!("\r\x1b[2K{} {}", cyan(glyph), bold(&label));
+        let _ = std::io::stdout().flush();
+        thread::sleep(Duration::from_millis(60));
+    }
+    print!("\r\x1b[2K{} {}", cyan("✦"), bold(title));
+    let _ = std::io::stdout().flush();
+    thread::sleep(Duration::from_millis(180));
+
+    // 2. Retract the label one character at a time, keeping the `✦ ` glyph.
+    let label: Vec<char> = title.chars().collect();
+    for keep in (0..label.len()).rev() {
+        let shown: String = label[..keep].iter().collect();
+        print!("\r\x1b[2K{} {}", cyan("✦"), dim(&shown));
+        let _ = std::io::stdout().flush();
+        thread::sleep(Duration::from_millis(16));
+    }
+
+    // 3. Type the message onto the same line, after the `✦ `. Any further
+    //    lines stream below under the gutter.
+    let mut lines = message.lines();
+    if let Some(first) = lines.next() {
+        print!("\r\x1b[2K{} ", cyan("✦"));
+        type_out(first);
+        println!();
+    }
+    for line in lines {
+        print!("{} ", gutter());
+        type_out(line);
+        println!();
+    }
+    let _ = std::io::stdout().flush();
+}
+
+/// Clear the cursor's current line and return to its start. Used to wipe a
+/// stopped spinner when there's nothing to reveal. No-op when disabled.
+pub fn clear_line() {
     if enabled() {
+        print!("\r\x1b[2K");
+        let _ = std::io::stdout().flush();
+    }
+}
+
+/// Print `text` one character at a time, flushing and pausing between each.
+fn type_out(text: &str) {
+    for ch in text.chars() {
+        print!("{ch}");
+        let _ = std::io::stdout().flush();
         thread::sleep(Duration::from_millis(8));
     }
 }

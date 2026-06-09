@@ -52,9 +52,12 @@ struct DeltaMessage {
 
 /// Stream a chat completion live and return the full collected message.
 ///
-/// A spinner animates `title` while we wait for the model; the first token
-/// settles it into a static header, then the body is revealed character by
-/// character under a `│` gutter. Runs the async request on a local runtime so
+/// Collect a chat completion and return the full message.
+///
+/// A spinner animates `title` on the header line while the model generates;
+/// once the response is complete, that same line transforms in place — the
+/// label retracts and the generated message is typed out over it (see
+/// [`crate::style::reveal`]). Runs the async request on a local runtime so
 /// callers stay synchronous.
 pub fn stream_and_collect(
     title: &str,
@@ -63,49 +66,28 @@ pub fn stream_and_collect(
     messages: Vec<ChatMessage>,
     temperature: Option<f32>,
 ) -> Result<String> {
-    use std::io::Write;
-
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
     let mut full_message = String::new();
-    // `Some` until the first token settles the header; `take`n exactly once.
-    let mut spinner = Some(crate::style::Spinner::start(title));
-    let mut at_line_start = true;
 
-    rt.block_on(async {
+    let spinner = crate::style::Spinner::start(title);
+    let stream_result = rt.block_on(async {
         stream_chat(api_key, model, messages, temperature, |content| {
-            // First content arriving stops the spinner and prints the header.
-            if let Some(spinner) = spinner.take() {
-                spinner.finish();
-            }
-            for ch in content.chars() {
-                full_message.push(ch);
-                if at_line_start {
-                    print!("{} ", crate::style::gutter());
-                    at_line_start = false;
-                }
-                if ch == '\n' {
-                    println!();
-                    at_line_start = true;
-                } else {
-                    print!("{ch}");
-                }
-                // Flush and pace each character so it reveals one at a time.
-                let _ = std::io::stdout().flush();
-                crate::style::tick();
-            }
+            full_message.push_str(&content);
         })
         .await
-    })?;
+    });
+    // Stop the spinner before anything else so the terminal is never left
+    // mid-animation, whether the stream succeeded or errored.
+    spinner.stop();
+    stream_result?;
 
-    // An empty response never settled the spinner; do it so the header shows.
-    if let Some(spinner) = spinner.take() {
-        spinner.finish();
-    }
-    // Close the final line when the body didn't end with a newline.
-    if !at_line_start {
-        println!();
+    if full_message.trim().is_empty() {
+        // Nothing to reveal; clear the spinner's line so the error reads clean.
+        crate::style::clear_line();
+    } else {
+        crate::style::reveal(title, &full_message);
     }
 
     Ok(full_message)
