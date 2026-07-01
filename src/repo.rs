@@ -98,6 +98,15 @@ impl Repo {
         Ok(())
     }
 
+    /// Stage modifications and deletions of already-tracked files, without
+    /// adding new untracked files (equivalent to `git add -u`).
+    pub fn stage_tracked(&self) -> Result<()> {
+        let mut index = self.repository.index()?;
+        index.update_all(["*"].iter(), None)?;
+        index.write()?;
+        Ok(())
+    }
+
     pub fn get_staged_git_changes(&self) -> Result<String> {
         let head_tree = self
             .repository

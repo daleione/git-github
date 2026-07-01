@@ -20,14 +20,26 @@ fn report_commit(repo: &Repo) -> Result<()> {
     Ok(())
 }
 
+/// How much of the working tree to stage before generating a commit message.
+pub enum StageMode {
+    /// Leave the index as-is.
+    None,
+    /// Stage every change, including new untracked files (`git add -A`).
+    All,
+    /// Stage modifications and deletions of tracked files only (`git add -u`).
+    Tracked,
+}
+
 /// Shared setup for every commit entry point: open the repo, optionally stage,
 /// and load a config with a usable API key.
-fn prepare(stage: bool) -> Result<(Repo, String, AppConfig)> {
+fn prepare(stage: StageMode) -> Result<(Repo, String, AppConfig)> {
     let path = env::current_dir().map_err(|_| Error::NoCurrentDir)?;
     let repo = Repo::new(&path)?;
 
-    if stage {
-        repo.stage_all()?;
+    match stage {
+        StageMode::None => {}
+        StageMode::All => repo.stage_all()?,
+        StageMode::Tracked => repo.stage_tracked()?,
     }
 
     let changes = repo.get_staged_git_changes()?;
@@ -55,7 +67,7 @@ enum Action {
 }
 
 /// Generate a commit message from the staged changes and act on it per `mode`.
-pub fn run(stage: bool, mode: CommitMode) -> Result<()> {
+pub fn run(stage: StageMode, mode: CommitMode) -> Result<()> {
     let (repo, changes, config) = prepare(stage)?;
     let model = config.deepseek.model.as_deref().unwrap_or("deepseek-chat");
 

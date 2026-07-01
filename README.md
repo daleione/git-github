@@ -60,7 +60,7 @@ Options:
 
 Generates a commit message from your **staged** changes using the DeepSeek API.
 Like `git commit`, it commits only what you have staged; pass `-a` to stage all
-changes first.
+changes first, or `-u` to stage only already-tracked files.
 
 On an interactive terminal, `git ac` shows the generated message and asks what
 to do — **[Y]es** to commit, **[e]dit** in your editor, **[r]egenerate** (with
@@ -70,6 +70,7 @@ away so scripts are unaffected.
 ```bash
 git ac          # commit the staged changes with an AI-generated message
 git ac -a       # stage all changes first, then generate and commit
+git ac -u       # stage tracked files only, then generate and commit
 git ac -e       # generate, then open the editor to review before committing
 git ac -p       # preview the message only (no staging, no commit)
 ```
@@ -77,6 +78,7 @@ git ac -p       # preview the message only (no staging, no commit)
 Options:
 
 - `-a`, `--all`: stage all changes before committing (like `git add -A`)
+- `-u`, `--update`: stage tracked files only before committing (like `git add -u`)
 - `-e`, `--edit`: open the editor to review/edit before committing
 - `-p`, `--preview`: only preview the message; do not stage or commit
 
